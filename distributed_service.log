@@ -1,0 +1,2 @@
+2025-11-08 01:28:27 [com.uiuc.systems.Main.main()] INFO  com.uiuc.systems.MemberShipList - Adding node localhost to the membership list
+2025-11-08 01:28:27 [UDPServerThread] INFO  com.uiuc.systems.UDPServer - Starting up the UDP server on port 6970

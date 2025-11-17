@@ -1,0 +1,106 @@
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7601.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu ping nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7602.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu ping nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7603.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu ping nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7604.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu ping nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7605.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu ping nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7606.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu ping nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7607.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu ping nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7608.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu ping nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7609.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu ping nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7610.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu ping nosuspect"
+
+-------------------
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7601.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip suspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7602.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip suspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7603.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip suspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7604.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip suspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7605.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip suspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7606.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip suspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7607.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip suspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7608.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip suspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7609.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip suspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7610.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip suspect"
+
+java src/main/java/server/QueryServer.java "distributed_service.log"
+
+java src/main/java/client/DistributedLogQuerierClient.java "-c -i" "Hello World!"
+
+rm distributed_service.log
+
+drop 0.05
+
+drop 0.10
+
+drop 0.25
+
+drop 0.50
+
+drop 0.75
+
+drop 1.0
+
+
+---------------------------------------------------------------------- MP3 CMDS ------------------------------------------------------------------------------------
+ssh anantg2@fa25-cs425-76XX.cs.illinois.edu
+
+mvn clean package
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="localhost localhost gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7601.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7602.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7603.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7604.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7605.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7606.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7607.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7608.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7609.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7610.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+for i in $(seq 0 99); do                                                                                 
+  dd if=/dev/urandom of=testfiles/1K/file_1K_$i.txt bs=1K count=1 status=none
+  dd if=/dev/urandom of=testfiles/10K/file_10K_$i.txt bs=10K count=1 status=none
+  dd if=/dev/urandom of=testfiles/100K/file_100K_$i.txt bs=100K count=1 status=none
+  dd if=/dev/urandom of=testfiles/512K/file_512K_$i.txt bs=512K count=1 status=none
+  dd if=/dev/urandom of=testfiles/1M/file_1M_$i.txt bs=1M count=1 status=none
+done
+
+cp testfiles/1K/* inputs/
+
+git clean -n -d inputs/
+git clean -fd inputs/
+
+Logging commands:
+java src/main/java/server/QueryServer.java "filepath/filename"
+java src/main/java/client/DistributedLogQuerierClient.java "grep options" "query"
+
+
