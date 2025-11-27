@@ -4,8 +4,6 @@ import java.util.*;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.file.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import com.uiuc.systems.NodeInfo.State;
 
@@ -379,6 +377,25 @@ public class Main {
                 ring.printRing();
             } else if (lowerLine.startsWith("meta")) {
                 hydfs.printFileMetaMap(); 
+            }
+            else if (lowerLine.startsWith("rainstorm")) {
+                System.out.println("RainStorm leader invocation received.");
+                // TODO: Initialize RainStorm leader logic here.
+            }
+            else if (lowerLine.equals("list_tasks")) {
+                System.out.println("Listing RainStorm tasks...");
+                // TODO: Implement listing of RainStorm tasks (VM, PID, op_exe, log file)
+            }
+            else if (lowerLine.startsWith("kill_task")) {
+                String[] parts = line.split("\\s+");
+                if (parts.length != 3) {
+                    System.out.println("Usage: kill_task <VM> <PID>");
+                } else {
+                    String vm = parts[1];
+                    String pid = parts[2];
+                    System.out.println("Attempting to kill task on VM " + vm + " with PID " + pid);
+                    // TODO: Implement kill task logic
+                }
             } else {
                 System.out.println("Unknown command: " + line);
             }
@@ -404,3 +421,30 @@ public class Main {
         }
     }
 }
+
+
+// Helper code that may be useful elsewhere
+
+// worker process starting operator execution
+
+/*
+if operator == "transform":
+    exec = "operator_transform.py"
+elif operator == "filter":
+    exec = "operator_filter.py"
+elif operator == "aggregate":
+    exec = "operator_aggregate.py"
+
+ProcessBuilder pb = new ProcessBuilder("python3", exec, pattern);
+Process proc = pb.start();
+
+BufferedWriter opInput = new BufferedWriter(new OutputStreamWriter(proc.getOutputStream()));
+BufferedReader opOutput = new BufferedReader(new InputStreamReader(proc.getInputStream()));
+*/
+
+// data flow inside a task
+// receive tuple →
+// write to operator.stdin →
+// operator transforms tuple →
+// operator.stdout →
+// task forwards output
