@@ -2,6 +2,7 @@ package com.uiuc.systems;
 
 import java.io.*;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Paths;
@@ -284,6 +285,23 @@ public class HyDFS {
         catch(Exception e){
             logger.error("Append incomplete with issue: " + e.getMessage());
             System.out.println("Append incomplete with issue: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Used my MP4 Stream Processor final stage task
+     * Append the given tuple to the specified HyDFS file
+     */
+    public boolean appendTuple(String hdfsFileName, String tuple) {
+        try {
+            // Convert tuple to bytes
+            byte[] data = (tuple + "\n").getBytes(StandardCharsets.UTF_8);
+
+            // Forward request to file owner
+            return sendAppendTupleRequestToOwner(hdfsFileName, data);
+        } catch (Exception e) {
+            System.err.println("HyDFS appendTuple error: " + e.getMessage());
             return false;
         }
     }

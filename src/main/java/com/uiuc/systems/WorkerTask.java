@@ -10,37 +10,41 @@ public class WorkerTask {
     private final String operator;
     private final List<String> operatorArgs;
     private final List<DownstreamTarget> downstream = new ArrayList<>();
+    private final boolean isFinal;
 
     private Process operatorProc;
     private BufferedWriter opStdin;
     private BufferedReader opStdout;
 
-    public WorkerTask(int taskId, String operator, List<String> operatorArgs, List<DownstreamTarget> downstream) {
+    public WorkerTask(int taskId, String operator, boolean isFinal, List<String> operatorArgs, List<DownstreamTarget> downstream) {
         this.taskId = taskId;
         this.operator = operator;
+        this.isFinal = isFinal;
         this.operatorArgs = operatorArgs;
         this.downstream.addAll(downstream);
     }
 
     public static void main(String[] args) throws Exception {
         if (args.length < 3) {
-            System.err.println("Usage: WorkerTask <taskId> <operatorType> <operatorArgs...>");
+            System.err.println("Usage: WorkerTask <taskId> <operatorType> <isFinal> <operatorArgs...>");
             return;
         }
 
         int taskId = Integer.parseInt(args[0]);
         String operatorType = args[1];
+        int isFinalFlag = Integer.parseInt(args[2]);
+        boolean isFinal = (isFinalFlag == 1);
 
         // All args after operator type are operator arguments
         List<String> operatorArgs = new ArrayList<>();
-        for (int i = 2; i < args.length; i++) {
+        for (int i = 3; i < args.length; i++) {
             operatorArgs.add(args[i]);
         }
 
         // Load downstream info—this would come from a config or leader message
         List<DownstreamTarget> downstream = RoutingLoader.load(taskId);
 
-        WorkerTask worker = new WorkerTask(taskId, operatorType, operatorArgs, downstream);
+        WorkerTask worker = new WorkerTask(taskId, operatorType, isFinal, operatorArgs, downstream);
         worker.runTask();
     }
 
@@ -64,6 +68,7 @@ public class WorkerTask {
             case "filter": cmd.add("operator_filter.py"); break;
             case "transform": cmd.add("operator_transform.py"); break;
             case "aggregate": cmd.add("operator_aggregate.py"); break;
+            case "identity": cmd.add("operator_identity.py"); break;
             default:
                 System.err.println("Unknown operator: " + operator);
                 System.exit(1);
@@ -83,7 +88,15 @@ public class WorkerTask {
         try {
             String line;
             while ((line = opStdout.readLine()) != null) {
-                forwardTuple(line);
+                // if final task, write to HyDFS (stubbed here)
+                if (isFinal) {
+                    System.out.println(line);
+                    hydfs.appendToHyDFS("stream_out.txt", line);
+                } 
+                // else, forward to downstream tasks
+                else {
+                    forwardTuple(line);
+    }
             }
         } catch (Exception e) {
             System.err.println("Task " + taskId + ": operator stdout closed.");
@@ -121,14 +134,6 @@ public class WorkerTask {
             }
         } catch (Exception ignored) {}
     }
-}
-
-// Simple class for downstream info
-// TODO likely will need to be on its own file and be used determine routing
-class DownstreamTarget {
-    public String host;
-    public int port;
-    public int taskId;
 }
 
 // Stub for fetching routing info
