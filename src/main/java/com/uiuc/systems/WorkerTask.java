@@ -96,7 +96,7 @@ public class WorkerTask {
                 // else, forward to downstream tasks
                 else {
                     forwardTuple(line);
-    }
+                }
             }
         } catch (Exception e) {
             System.err.println("Task " + taskId + ": operator stdout closed.");
@@ -142,6 +142,25 @@ public class WorkerTask {
 class RoutingLoader {
     public static List<DownstreamTarget> load(int taskId) {
         // leader will place routing files on VM
-        return new ArrayList<>();
+        List<DownstreamTarget> targets = new ArrayList<>();
+        //Make sure this routing file path matches with what the server wrote to
+        String filename = "/tmp/routing_" + taskId + ".conf";
+
+        try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
+            String first = br.readLine();
+            int count = Integer.parseInt(first.split("=")[1]);
+            for (int i = 0; i < count; i++) {
+                String line = br.readLine();
+                String[] s = line.split(":");
+                String host = s[0];
+                int port = Integer.parseInt(s[1]);
+                int downstreamTaskId = Integer.parseInt(s[2]);
+                targets.add(new DownstreamTarget(host, port, downstreamTaskId));
+            }
+        } catch (Exception e) {
+            System.err.println("RoutingLoader: cannot load " + filename);
+            e.printStackTrace();
+        }
+        return targets;
     }
 }

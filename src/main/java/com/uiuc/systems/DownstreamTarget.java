@@ -2,6 +2,7 @@ package com.uiuc.systems;
 
 public class DownstreamTarget {
     public String host;
+
     public int port;
     public int taskId;
 
