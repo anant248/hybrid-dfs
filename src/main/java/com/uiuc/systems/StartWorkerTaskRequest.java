@@ -5,15 +5,48 @@ import java.util.List;
 
 public class StartWorkerTaskRequest implements Serializable {
     private int taskId;
+
+    private int stageIdx;
     private String operator;
     private boolean isFinal;
     private List<String> operatorArgs;
 
-    public StartWorkerTaskRequest(int taskId, String operator, boolean isFinal, List<String> operatorArgs) {
+    private String leaderIp;
+
+    private int leaderPort;
+
+    public StartWorkerTaskRequest(String leaderIp, int leaderPort, int taskId, int stageIdx, String operator, boolean isFinal, List<String> operatorArgs) {
+        this.leaderIp = leaderIp;
+        this.leaderPort = leaderPort;
         this.taskId = taskId;
+        this.stageIdx = stageIdx;
         this.operator = operator;
         this.isFinal = isFinal;
         this.operatorArgs = operatorArgs;
+    }
+
+    public int getStageIdx() {
+        return stageIdx;
+    }
+
+    public String getLeaderIp() {
+        return leaderIp;
+    }
+
+    public void setLeaderIp(String leaderIp) {
+        this.leaderIp = leaderIp;
+    }
+
+    public int getLeaderPort() {
+        return leaderPort;
+    }
+
+    public void setLeaderPort(int leaderPort) {
+        this.leaderPort = leaderPort;
+    }
+
+    public void setStageIdx(int stageIdx) {
+        this.stageIdx = stageIdx;
     }
 
     public int getTaskId() {

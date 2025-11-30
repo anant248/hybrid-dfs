@@ -25,8 +25,8 @@ public class LeaderLoggerHelper {
         log.info("EVENT=TASK_END stage={} taskId={} vm={} reason={}", stage, taskId, vmHost, reason);
     }
 
-    public static void taskFail(int stage, int taskId, String vmHost, String error) {
-        log.info("EVENT=TASK_FAIL stage={} taskId={} vm={} error={}", stage, taskId, vmHost, error);
+    public static void taskFail(int stage, int taskId, String vmHost) {
+        log.info("EVENT=TASK_FAIL stage={} taskId={} vm={} error={}", stage, taskId, vmHost);
     }
 
     public static void autoscaleDecision(int stage, int oldTasks, int newTasks, double rate) {

@@ -1,11 +1,21 @@
 package com.uiuc.systems;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import java.io.*;
 import java.net.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class WorkerTask {
+    private final String leaderIp;
 
+    private final int leaderPort;
     private final int taskId;
     private final String operator;
     private final List<String> operatorArgs;
@@ -15,13 +25,31 @@ public class WorkerTask {
     private Process operatorProc;
     private BufferedWriter opStdin;
     private BufferedReader opStdout;
+    private int stageIdx;
+    private String taskLogPath;
+    private final Set<String> seenInputTuples = ConcurrentHashMap.newKeySet();
+    private final AtomicLong nextTupleId = new AtomicLong(0);
 
-    public WorkerTask(int taskId, String operator, boolean isFinal, List<String> operatorArgs, List<DownstreamTarget> downstream) {
+    private static final ObjectMapper mapper = new ObjectMapper();
+
+    HyDFS hdfs = GlobalHyDFS.hdfs;
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(WorkerTask.class);
+
+    public WorkerTask(String leaderIp, int leaderPort, int taskId, String operator, boolean isFinal, List<String> operatorArgs, List<DownstreamTarget> downstream,int stageIdx) {
+        this.leaderIp = leaderIp;
+        this.leaderPort = leaderPort;
         this.taskId = taskId;
         this.operator = operator;
         this.isFinal = isFinal;
         this.operatorArgs = operatorArgs;
         this.downstream.addAll(downstream);
+        this.stageIdx = stageIdx;
+        this.taskLogPath = "/append_log/rainstorm_task_" + taskId + ".log";
+        rebuildStateFromLog();
+    }
+
+    private long generateTupleId() {
+        return nextTupleId.getAndIncrement();
     }
 
     public static void main(String[] args) throws Exception {
@@ -31,20 +59,21 @@ public class WorkerTask {
         }
 
         int taskId = Integer.parseInt(args[0]);
-        String operatorType = args[1];
-        int isFinalFlag = Integer.parseInt(args[2]);
+        int stageIdx = Integer.parseInt(args[1]);
+        String operatorType = args[2];
+        int isFinalFlag = Integer.parseInt(args[3]);
         boolean isFinal = (isFinalFlag == 1);
 
         // All args after operator type are operator arguments
         List<String> operatorArgs = new ArrayList<>();
-        for (int i = 3; i < args.length; i++) {
+        for (int i = 4; i < args.length; i++) {
             operatorArgs.add(args[i]);
         }
 
         // Load downstream info—this would come from a config or leader message
         List<DownstreamTarget> downstream = RoutingLoader.load(taskId);
 
-        WorkerTask worker = new WorkerTask(taskId, operatorType, isFinal, operatorArgs, downstream);
+        WorkerTask worker = new WorkerTask(taskId, operatorType, isFinal, operatorArgs, downstream, stageIdx);
         worker.runTask();
     }
 
@@ -91,7 +120,8 @@ public class WorkerTask {
                 // if final task, write to HyDFS (stubbed here)
                 if (isFinal) {
                     System.out.println(line);
-                    hydfs.appendToHyDFS("stream_out.txt", line);
+                    //TODO: fix append call
+                    hdfs.appendToHyDFS("stream_out.txt", line);
                 } 
                 // else, forward to downstream tasks
                 else {
@@ -109,7 +139,19 @@ public class WorkerTask {
                  BufferedWriter w = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()))) {
                 w.write(tuple + "\n");
                 w.flush();
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                logger.error("Task {}: failed to send tuple to downstream task {} at {}:{}", taskId, t.getTaskId(), t.host, t.port, e);
+                WorkerTaskFailRequest req = new WorkerTaskFailRequest(taskId,t.getTaskId());
+                try(Socket socket = new Socket(leaderIp, leaderPort);
+                    ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+                ){
+                    out.writeObject(req);
+                    out.flush();
+                    logger.info("Task {} notified leader {}:{} of failure of {}", taskId, leaderIp, leaderPort, t.getTaskId());
+                } catch (Exception err){
+                    logger.error("Task {}: failed to notify leader", taskId, err);
+                }
+            }
         }
     }
 
@@ -125,14 +167,82 @@ public class WorkerTask {
         }
     }
 
+//    private void handleClient(Socket client) {
+//        try (BufferedReader r = new BufferedReader(new InputStreamReader(client.getInputStream()))) {
+//            String line;
+//            while ((line = r.readLine()) != null) {
+//                opStdin.write(line + "\n");
+//                opStdin.flush();
+//            }
+//        } catch (Exception ignored) {}
+//    }
     private void handleClient(Socket client) {
         try (BufferedReader r = new BufferedReader(new InputStreamReader(client.getInputStream()))) {
             String line;
             while ((line = r.readLine()) != null) {
-                opStdin.write(line + "\n");
-                opStdin.flush();
+                if (stageIdx == 0) {
+                    long id = generateTupleId();
+                    ObjectNode tuple = mapper.createObjectNode();
+                    tuple.put("id", id);
+                    tuple.put("line", line);
+                    String json = tuple.toString();
+                    seenInputTuples.add(Long.toString(id));
+                    appendToTaskLog("INPUT " + id);
+                    opStdin.write(json + "\n");
+                    opStdin.flush();
+                }
+                else {
+                    JsonNode js = mapper.readTree(line);
+                    String tupleId = js.get("id").asText();
+                    if (seenInputTuples.contains(tupleId)) {
+                        logger.debug("Task {} dropping duplicate tuple {}", taskId, tupleId);
+                        //TODO: SEND AN ACK EVEN IN THE CASE OF DUPLICATES
+                        continue;
+                    }
+                    seenInputTuples.add(tupleId);
+                    appendToTaskLog("INPUT " + tupleId);
+                    opStdin.write(line + "\n");
+                    opStdin.flush();
+                }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            logger.error("Task {} handleClient error", taskId, e);
+        }
+    }
+
+
+    private void rebuildStateFromLog() {
+        try {
+            String hdfsName = "rainstorm_task_" + taskId + ".log";
+            String localName = "task_" + taskId + "_log_local.txt";
+
+            boolean ok = hdfs.getHyDFSFileToLocalFileFromOwner(hdfsName, localName);
+            if (!ok) {
+                logger.info("No prior log found for task {}", taskId);
+                return;
+            }
+            List<String> lines = Files.readAllLines(Paths.get("output/" + localName));
+            for (String line : lines) {
+                if (line.startsWith("INPUT ")) {
+                    String tupleId = line.split(" ")[1];
+                    seenInputTuples.add(tupleId);
+                }
+            }
+            logger.info("Task {} rebuilt state: {} tuples", taskId, seenInputTuples.size());
+
+        } catch (Exception e) {
+            logger.error("Task {} failed to rebuild state", taskId, e);
+        }
+    }
+
+
+    private void appendToTaskLog(String logLine) {
+        try {
+            //TODO: fix append call
+            hdfs.appendToHyDFS(taskLogPath, logLine + "\n");
+        } catch (Exception e) {
+            logger.error("Task {}: failed to append to HyDFS log {}", taskId, taskLogPath, e);
+        }
     }
 }
 
