@@ -8,11 +8,15 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class WorkerTaskServer implements Runnable{
     private static final int PORT = 7979;
     private volatile boolean running = true;
     private ServerSocket sc;
+
+    private static final Map<Integer, Long> taskPidMap = new ConcurrentHashMap<>();
 
     public WorkerTaskServer(){}
 
@@ -53,19 +57,25 @@ public class WorkerTaskServer implements Runnable{
                 Integer port = ((StartWorkerTaskRequest) obj).getLeaderPort();
                 cmd.add(port.toString());
                 cmd.add(Integer.toString(((StartWorkerTaskRequest) obj).getTaskId()));
+                cmd.add(Integer.toString(((StartWorkerTaskRequest) obj).getStageIdx()));
                 cmd.add(((StartWorkerTaskRequest) obj).getOperator());
                 cmd.add(((StartWorkerTaskRequest) obj).isFinal() ? "1" : "0");
                 cmd.addAll(((StartWorkerTaskRequest) obj).getOperatorArgs());
 
-                new ProcessBuilder(cmd)
-                        .redirectErrorStream(true)
-                        .start();
+                Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+                long pid = p.pid();
+                int taskId = ((StartWorkerTaskRequest) obj).getTaskId();
+                taskPidMap.put(taskId, pid);
                 System.out.println("Started WorkerTask: " + ((StartWorkerTaskRequest) obj).getTaskId());
             }
-
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    //Helper to retrieve the process ID associated with the task ID, call this in Main.java
+    public static Long getPidForTask(int taskId) {
+        return taskPidMap.get(taskId);
     }
 
     public void stopServer() {

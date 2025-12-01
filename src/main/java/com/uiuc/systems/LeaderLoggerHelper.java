@@ -33,4 +33,9 @@ public class LeaderLoggerHelper {
         log.info("EVENT=AUTOSCALE stage={} oldTasks={} newTasks={} inputRate={}",
                 stage, oldTasks, newTasks, rate);
     }
+
+    public static void taskRestart(int stage, int taskId, String vmHost) {
+        log.info("EVENT=TASK_RESTART stage={} taskId={} vm={}", stage, taskId, vmHost);
+    }
+
 }

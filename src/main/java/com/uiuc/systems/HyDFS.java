@@ -279,7 +279,7 @@ public class HyDFS {
 
             String response = (String) in.readObject();
             logger.info("Append completed");
-            System.out.println("Append comepleted");
+            System.out.println("Append completed");
             return response.equals("ACK");
         }
         catch(Exception e){

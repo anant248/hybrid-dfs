@@ -10,7 +10,8 @@ import java.util.Map;
 
 public class RainStormLeader {
     NodeId current;
-    public static final int PORT = 7979;
+    public static final int LEADER_PORT = 7777;
+    public static final int WORKER_PORT = 7979;
     private final int numStages;
     private final int numTasks;
     private final boolean exactlyOnce;
@@ -20,6 +21,8 @@ public class RainStormLeader {
     private final int hw;
 
     private final String leaderHost;
+
+    private final List<String> vmHosts = Arrays.asList("vm1", "vm2", "vm3", "vm4", "vm5", "vm6", "vm7", "vm8", "vm9", "vm10");
 
     static class TaskInfo {
         final int globalTaskId;
@@ -64,6 +67,7 @@ public class RainStormLeader {
 //    }
 
     public void run() throws Exception {
+        new Thread(new LeaderServer(this, LEADER_PORT)).start();
         initializeTasks();
         distributeRoutingFiles();
         launchAllWorkerTasks();
@@ -71,11 +75,11 @@ public class RainStormLeader {
         LeaderLoggerHelper.runEnd("OK");
     }
     private void initializeTasks() {
-        List<String> ips = Arrays.asList("vm1", "vm2", "vm3", "vm4", "vm5", "vm6","vm7","vm8","vm9","vm10");
+//        List<String> ips = Arrays.asList("vm1", "vm2", "vm3", "vm4", "vm5", "vm6","vm7","vm8","vm9","vm10");
         int id = 0;
         for (int stage = 0; stage < numStages; stage++) {
             for (int i = 0; i < numTasks; i++) {
-                String vm = ips.get(id % ips.size());
+                String vm = vmHosts.get(id % vmHosts.size());
                 TaskInfo ti = new TaskInfo(id,stage,i,vm);
                 tasks.put(id, ti);
                 LeaderLoggerHelper.taskStart(stage,id,vm);
@@ -86,16 +90,7 @@ public class RainStormLeader {
 
     private void distributeRoutingFiles() {
         for (TaskInfo t : tasks.values()) {
-            String routing = buildRoutingFile(t);
-            WorkerTaskRoutingFileRequest req = new WorkerTaskRoutingFileRequest(routing,t.globalTaskId);
-
-            try(Socket socket = new Socket(t.host, PORT);
-                ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());) {
-                out.writeObject(req);
-                out.flush();
-            } catch (Exception e) {
-                System.out.print("Encountered an error while sending the routing file to the worker node");
-            }
+            sendRoutingFileToTask(t);
         }
     }
 
@@ -118,18 +113,54 @@ public class RainStormLeader {
 
     private void launchAllWorkerTasks() throws Exception {
         for (TaskInfo t : tasks.values()) {
-            boolean isFinal = (t.stageIdx == numStages - 1);
-            StartWorkerTaskRequest req = new StartWorkerTaskRequest(leaderHost, PORT, t.globalTaskId, t.stageIdx, chooseOperator(t.stageIdx), isFinal, operatorArgs(t.stageIdx));
+            launchSingleWorkerTask(t);
+        }
+    }
 
-            try(Socket socket = new Socket(t.host,PORT);
-                ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-            ){
-                out.writeObject(req);
-                out.flush();
-            } catch (Exception e){
-                System.out.println("There was an error while sending the start request to the worker task");
+    private void launchSingleWorkerTask(TaskInfo t) {
+        boolean isFinal = (t.stageIdx == numStages - 1);
+        StartWorkerTaskRequest req = new StartWorkerTaskRequest(leaderHost, LEADER_PORT, t.globalTaskId, t.stageIdx, chooseOperator(t.stageIdx), isFinal, operatorArgs(t.stageIdx));
+
+        try (Socket socket = new Socket(t.host, WORKER_PORT);
+             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
+            out.writeObject(req);
+            out.flush();
+        } catch (Exception e) {
+            System.out.println("There was an error while sending the start request to the worker task " + t.globalTaskId);
+        }
+    }
+
+    private String chooseNewHost(String oldHost) {
+        int idx = vmHosts.indexOf(oldHost);
+        if (idx == -1) {
+            return vmHosts.get(0);
+        }
+        int newIdx = (idx + 1) % vmHosts.size();
+        return vmHosts.get(newIdx);
+    }
+
+    private void restartFailedTask(int failedTaskId) {
+        TaskInfo old = tasks.get(failedTaskId);
+        if (old == null) {
+            System.err.println("Leader: restartFailedTask called for unknown taskId " + failedTaskId);
+            return;
+        }
+
+        String newHost = chooseNewHost(old.host);
+        TaskInfo updated = new TaskInfo(old.globalTaskId, old.stageIdx, old.idxWithinStage, newHost);
+        tasks.put(failedTaskId, updated);
+        sendRoutingFileToTask(updated);
+
+        if (updated.stageIdx > 0) {
+            int upstreamStage = updated.stageIdx - 1;
+            for (TaskInfo t : tasks.values()) {
+                if (t.stageIdx == upstreamStage) {
+                    sendRoutingFileToTask(t);
+                }
             }
         }
+        launchSingleWorkerTask(updated);
+        LeaderLoggerHelper.taskRestart(updated.stageIdx, updated.globalTaskId, newHost);
     }
 
     private String chooseOperator(int stage) {
@@ -142,9 +173,27 @@ public class RainStormLeader {
         return List.of();
     }
 
+    private void sendRoutingFileToTask(TaskInfo t) {
+        String routing = buildRoutingFile(t);
+        WorkerTaskRoutingFileRequest req = new WorkerTaskRoutingFileRequest(routing, t.globalTaskId);
+
+        try (Socket socket = new Socket(t.host, WORKER_PORT);
+             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
+            out.writeObject(req);
+            out.flush();
+        } catch (Exception e) {
+            System.out.println("Encountered an error while sending the routing file to the worker node " + t.globalTaskId);
+        }
+    }
+
     public void workerTaskFailureHandler(WorkerTaskFailRequest req){
         TaskInfo failedTaskInfo = tasks.get(req.getFailedTaskId());
+        if (failedTaskInfo == null) {
+            System.err.println("Leader: received failure for unknown task " + req.getFailedTaskId());
+            return;
+        }
         LeaderLoggerHelper.taskFail(failedTaskInfo.idxWithinStage,failedTaskInfo.globalTaskId,failedTaskInfo.host);
         //TODO: what you wanna do after logging?
+        restartFailedTask(req.getFailedTaskId());
     }
 }

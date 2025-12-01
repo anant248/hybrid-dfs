@@ -33,7 +33,25 @@ public class WorkerTask {
     private static final ObjectMapper mapper = new ObjectMapper();
 
     HyDFS hdfs = GlobalHyDFS.hdfs;
+    private static final List<String> ips = Arrays.asList("vm1","vm2","vm3","vm4","vm5","vm6","vm7","vm8","vm9","vm10");
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(WorkerTask.class);
+
+    static class PendingTuple implements Serializable {
+        final String tupleId;
+        final String json;
+        volatile long lastSentTime;
+        volatile int retryCount;
+
+        PendingTuple(String tupleId, String json) {
+            this.tupleId = tupleId;
+            this.json = json;
+            this.lastSentTime = System.currentTimeMillis();
+            this.retryCount = 0;
+        }
+    }
+
+    private final ConcurrentHashMap<String, PendingTuple> pendingTuples = new ConcurrentHashMap<>();
+    private static final long RETRY_INTERVAL = 2000;
 
     public WorkerTask(String leaderIp, int leaderPort, int taskId, String operator, boolean isFinal, List<String> operatorArgs, List<DownstreamTarget> downstream,int stageIdx) {
         this.leaderIp = leaderIp;
@@ -46,6 +64,7 @@ public class WorkerTask {
         this.stageIdx = stageIdx;
         this.taskLogPath = "/append_log/rainstorm_task_" + taskId + ".log";
         rebuildStateFromLog();
+        //TODO: CHECK IF THE LOG FILE SHOULD BE CREATED FIRST IN HYDFS FOR APPENDS TO WORK
     }
 
     private long generateTupleId() {
@@ -58,22 +77,24 @@ public class WorkerTask {
             return;
         }
 
-        int taskId = Integer.parseInt(args[0]);
-        int stageIdx = Integer.parseInt(args[1]);
-        String operatorType = args[2];
-        int isFinalFlag = Integer.parseInt(args[3]);
+        String leaderIp = args[0];
+        int leaderPort = Integer.parseInt(args[1]);
+        int taskId = Integer.parseInt(args[2]);
+        int stageIdx = Integer.parseInt(args[3]);
+        String operatorType = args[4];
+        int isFinalFlag = Integer.parseInt(args[5]);
         boolean isFinal = (isFinalFlag == 1);
 
         // All args after operator type are operator arguments
         List<String> operatorArgs = new ArrayList<>();
-        for (int i = 4; i < args.length; i++) {
+        for (int i = 6; i < args.length; i++) {
             operatorArgs.add(args[i]);
         }
 
         // Load downstream info—this would come from a config or leader message
         List<DownstreamTarget> downstream = RoutingLoader.load(taskId);
 
-        WorkerTask worker = new WorkerTask(taskId, operatorType, isFinal, operatorArgs, downstream, stageIdx);
+        WorkerTask worker = new WorkerTask(leaderIp, leaderPort, taskId, operatorType, isFinal, operatorArgs, downstream, stageIdx);
         worker.runTask();
     }
 
@@ -87,6 +108,8 @@ public class WorkerTask {
 
         // Start input listener (TCP)
         startInputServer();
+        startRetryThread();
+        startAckServer();
     }
 
     private void launchOperator() throws IOException {
@@ -137,7 +160,12 @@ public class WorkerTask {
         for (DownstreamTarget t : downstream) {
             try (Socket socket = new Socket(t.host, t.port);
                  BufferedWriter w = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()))) {
-                w.write(tuple + "\n");
+                ObjectNode js = (ObjectNode) mapper.readTree(tuple);
+                js.put("srcTask", taskId);
+                String newTuple = js.toString();
+                String tupleId = js.get("id").asText();
+                pendingTuples.put(tupleId, new PendingTuple(tupleId, newTuple));
+                w.write(newTuple + "\n");
                 w.flush();
             } catch (Exception e) {
                 logger.error("Task {}: failed to send tuple to downstream task {} at {}:{}", taskId, t.getTaskId(), t.host, t.port, e);
@@ -167,7 +195,45 @@ public class WorkerTask {
         }
     }
 
-//    private void handleClient(Socket client) {
+    private void startRetryThread() {
+        Thread retryThread = new Thread(() -> {
+            while (true) {
+                try {
+                    long now = System.currentTimeMillis();
+                    for (PendingTuple p : pendingTuples.values()) {
+                        if (now - p.lastSentTime >= RETRY_INTERVAL) {
+                            retrySend(p);
+                        }
+                    }
+                    Thread.sleep(500);
+                } catch (Exception e) {
+                    logger.error("Retry thread crashed", e);
+                }
+            }
+        });
+        retryThread.setDaemon(true);
+        retryThread.start();
+    }
+
+    private void retrySend(PendingTuple p) {
+        logger.info("Task {} retrying tuple {} retryCount={}", taskId, p.tupleId, p.retryCount);
+        for (DownstreamTarget t : downstream) {
+            try (Socket socket = new Socket(t.host, t.port);
+                 BufferedWriter w = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()))) {
+                w.write(p.json + "\n");
+                w.flush();
+                p.lastSentTime = System.currentTimeMillis();
+                p.retryCount++;
+
+            } catch (Exception e) {
+                logger.error("Retry failed for tuple {} to downstream {}", p.tupleId, t.getTaskId());
+            }
+        }
+    }
+
+
+
+    //    private void handleClient(Socket client) {
 //        try (BufferedReader r = new BufferedReader(new InputStreamReader(client.getInputStream()))) {
 //            String line;
 //            while ((line = r.readLine()) != null) {
@@ -194,15 +260,18 @@ public class WorkerTask {
                 else {
                     JsonNode js = mapper.readTree(line);
                     String tupleId = js.get("id").asText();
+                    int upstreamTask = js.get("srcTask").asInt();
                     if (seenInputTuples.contains(tupleId)) {
                         logger.debug("Task {} dropping duplicate tuple {}", taskId, tupleId);
                         //TODO: SEND AN ACK EVEN IN THE CASE OF DUPLICATES
+                        sendAck(upstreamTask, tupleId);
                         continue;
                     }
                     seenInputTuples.add(tupleId);
                     appendToTaskLog("INPUT " + tupleId);
                     opStdin.write(line + "\n");
                     opStdin.flush();
+                    sendAck(upstreamTask,tupleId);
                 }
             }
         } catch (Exception e) {
@@ -210,10 +279,30 @@ public class WorkerTask {
         }
     }
 
+    private void sendAck(int upstreamTaskId, String tupleId) {
+        try {
+            String host = hostOf(upstreamTaskId);
+            int port = 10000 + upstreamTaskId;
+
+            try (Socket sock = new Socket(host, port);
+                 ObjectOutputStream out = new ObjectOutputStream(sock.getOutputStream())) {
+
+                out.writeObject(new TupleAck(tupleId));
+                out.flush();
+            }
+        } catch (Exception e) {
+            logger.error("Task {} failed to send ACK for {} to upstream {}", taskId, tupleId, upstreamTaskId, e);
+        }
+    }
+
+    private String hostOf(int taskId){
+        return ips.get(taskId%ips.size());
+    }
 
     private void rebuildStateFromLog() {
         try {
             String hdfsName = "rainstorm_task_" + taskId + ".log";
+            //TODO: CHECK IF THE OUTPUT FILE STORED AS .log or .txt
             String localName = "task_" + taskId + "_log_local.txt";
 
             boolean ok = hdfs.getHyDFSFileToLocalFileFromOwner(hdfsName, localName);
@@ -242,6 +331,33 @@ public class WorkerTask {
             hdfs.appendToHyDFS(taskLogPath, logLine + "\n");
         } catch (Exception e) {
             logger.error("Task {}: failed to append to HyDFS log {}", taskId, taskLogPath, e);
+        }
+    }
+
+    private void startAckServer() {
+        int ackPort = 10000 + taskId;
+        new Thread(() -> {
+            try (ServerSocket server = new ServerSocket(ackPort)) {
+                logger.info("Task {} ACK server started on port {}", taskId, ackPort);
+
+                while (true) {
+                    Socket client = server.accept();
+                    new Thread(() -> handleAck(client)).start();
+                }
+            } catch (Exception e) {
+                logger.error("Task {} ACK server crashed", taskId, e);
+            }
+        }).start();
+    }
+
+    private void handleAck(Socket client) {
+        try (ObjectInputStream in = new ObjectInputStream(client.getInputStream())) {
+            TupleAck ack = (TupleAck) in.readObject();
+            String tupleId = ack.getTupleId();
+            pendingTuples.remove(tupleId);
+            logger.debug("Task {} received ACK for tuple {}, removing from pending tuples map", taskId, tupleId);
+        } catch (Exception e) {
+            logger.error("Task {} failed to handle ACK", taskId, e);
         }
     }
 }
