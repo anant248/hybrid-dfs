@@ -2,6 +2,7 @@ package com.uiuc.systems;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
@@ -16,7 +17,7 @@ public class WorkerTaskServer implements Runnable{
     private volatile boolean running = true;
     private ServerSocket sc;
 
-    private static final Map<Integer, Long> taskPidMap = new ConcurrentHashMap<>();
+    private static final Map<Integer, Process> taskProcessMap = new ConcurrentHashMap<>();
 
     public WorkerTaskServer(){}
 
@@ -39,7 +40,11 @@ public class WorkerTaskServer implements Runnable{
     }
 
     private static void handle(Socket socket) {
-        try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
+        try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
+             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+        ) {
+            //TODO: DO WE HAVE TO FLUSH INITIALLY TO EXCHANGE HEADERS?
+            out.flush();
             Object obj = in.readObject();
             if (obj instanceof WorkerTaskRoutingFileRequest) {
                 String path = "/tmp/routing_" + ((WorkerTaskRoutingFileRequest) obj).getTaskId() + ".conf";
@@ -63,10 +68,26 @@ public class WorkerTaskServer implements Runnable{
                 cmd.addAll(((StartWorkerTaskRequest) obj).getOperatorArgs());
 
                 Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
-                long pid = p.pid();
                 int taskId = ((StartWorkerTaskRequest) obj).getTaskId();
-                taskPidMap.put(taskId, pid);
+                taskProcessMap.put(taskId, p);
                 System.out.println("Started WorkerTask: " + ((StartWorkerTaskRequest) obj).getTaskId());
+            }
+
+            if (obj instanceof KillWorkerTask){
+                int taskId = ((KillWorkerTask) obj).getTaskId();
+                Process p = taskProcessMap.get(taskId);
+                boolean killed = false;
+                if (p != null) {
+                    p.destroyForcibly();
+                    killed = true;
+                    taskProcessMap.remove(taskId);
+                    System.out.println("Killed WorkerTask " + taskId + " (PID=" + p.pid() + ")");
+                } else {
+                    System.out.println("No running process found for WorkerTask " + taskId);
+                }
+
+                out.writeObject(new WorkerTaskKillAckRequest(taskId,killed));
+                out.flush();
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -75,7 +96,7 @@ public class WorkerTaskServer implements Runnable{
 
     //Helper to retrieve the process ID associated with the task ID, call this in Main.java
     public static Long getPidForTask(int taskId) {
-        return taskPidMap.get(taskId);
+        return taskProcessMap.get(taskId).pid();
     }
 
     public void stopServer() {

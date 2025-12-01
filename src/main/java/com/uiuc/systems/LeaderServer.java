@@ -43,6 +43,8 @@ public class LeaderServer implements Runnable {
                 WorkerTaskFailRequest req = (WorkerTaskFailRequest) obj;
                 System.out.println("Leader received WorkerTaskFailRequest for task: " + req.getFailedTaskId());
                 leader.workerTaskFailureHandler(req);
+            } else if (obj instanceof WorkerTaskLoad) {
+                leader.processWorkerTaskLoad((WorkerTaskLoad) obj);
             }
         } catch (Exception e) {
             System.err.println("Leader failed to handle request: " + e);

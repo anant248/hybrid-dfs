@@ -17,16 +17,16 @@ public class LeaderLoggerHelper {
         log.info("EVENT=CONFIG nStages={} nTasksPerStage={} exactlyOnce={} autoscale={} inputRate={} LW={} HW={}",stages, tPerStage, eo, auto, rate, lw, hw);
     }
 
-    public static void taskStart(int stage, int taskId, String vmHost) {
-        log.info("EVENT=TASK_START stage={} taskId={} vm={}", stage, taskId, vmHost);
+    public static void taskStart(int stage, int taskId, String host) {
+        log.info("EVENT=TASK_START stage={} taskId={} vm={}", stage, taskId, host);
     }
 
-    public static void taskEnd(int stage, int taskId, String vmHost, String reason) {
-        log.info("EVENT=TASK_END stage={} taskId={} vm={} reason={}", stage, taskId, vmHost, reason);
+    public static void taskEnd(int stage, int taskId, String host, String reason) {
+        log.info("EVENT=TASK_END stage={} taskId={} vm={} reason={}", stage, taskId, host, reason);
     }
 
-    public static void taskFail(int stage, int taskId, String vmHost) {
-        log.info("EVENT=TASK_FAIL stage={} taskId={} vm={} error={}", stage, taskId, vmHost);
+    public static void taskFail(int stage, int taskId, String host) {
+        log.info("EVENT=TASK_FAIL stage={} taskId={} vm={} error={}", stage, taskId, host);
     }
 
     public static void autoscaleDecision(int stage, int oldTasks, int newTasks, double rate) {
@@ -34,8 +34,11 @@ public class LeaderLoggerHelper {
                 stage, oldTasks, newTasks, rate);
     }
 
-    public static void taskRestart(int stage, int taskId, String vmHost) {
-        log.info("EVENT=TASK_RESTART stage={} taskId={} vm={}", stage, taskId, vmHost);
+    public static void taskRestart(int stage, int taskId, String host) {
+        log.info("EVENT=TASK_RESTART stage={} taskId={} vm={}", stage, taskId, host);
     }
 
+    public static void taskScaleDown(int stage, int taskId, String host){
+        log.info("EVENT=SCALE_DOWN stage={} taskId={} host={}",stage,taskId,host);
+    }
 }

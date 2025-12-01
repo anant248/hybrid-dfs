@@ -1,15 +1,17 @@
 package com.uiuc.systems;
 
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class RainStormLeader {
-    NodeId current;
     public static final int LEADER_PORT = 7777;
     public static final int WORKER_PORT = 7979;
     private final int numStages;
@@ -23,6 +25,8 @@ public class RainStormLeader {
     private final String leaderHost;
 
     private final List<String> vmHosts = Arrays.asList("vm1", "vm2", "vm3", "vm4", "vm5", "vm6", "vm7", "vm8", "vm9", "vm10");
+
+    private final ConcurrentMap<Integer, Long> workerTaskLoad = new ConcurrentHashMap<>();
 
     static class TaskInfo {
         final int globalTaskId;
@@ -71,6 +75,11 @@ public class RainStormLeader {
         initializeTasks();
         distributeRoutingFiles();
         launchAllWorkerTasks();
+        if(autoscaleEnabled){
+            Thread rm = new Thread(this::adjustLoad);
+            rm.setDaemon(true);
+            rm.start();
+        }
         Thread.sleep(2000);
         LeaderLoggerHelper.runEnd("OK");
     }
@@ -100,13 +109,18 @@ public class RainStormLeader {
             sb.append("downstreamCount=0\n");
             return sb.toString();
         }
-        sb.append("downstreamCount=" + numTasks + "\n");
-        int nextStageStart=(t.stageIdx+1)*numTasks;
-        for (int i = 0; i < numTasks; i++) {
-            int downstreamId = nextStageStart + i;
-            TaskInfo downstream = tasks.get(downstreamId);
-            int port = 9000 + downstream.globalTaskId;
-            sb.append(downstream.host + ":" + port + ":" + downstream.globalTaskId + "\n");
+        int nextStage = t.stageIdx + 1;
+        List<TaskInfo> downstreamTasks = new java.util.ArrayList<>();
+        for (TaskInfo info : tasks.values()) {
+            if (info.stageIdx == nextStage) {
+                downstreamTasks.add(info);
+            }
+        }
+        sb.append("downstreamCount=").append(downstreamTasks.size()).append("\n");
+        for (TaskInfo d : downstreamTasks) {
+            //TODO: Double-check the worker task port
+            int port = 9000 + d.globalTaskId;
+            sb.append(d.host).append(":").append(port).append(":").append(d.globalTaskId).append("\n");
         }
         return sb.toString();
     }
@@ -130,7 +144,7 @@ public class RainStormLeader {
         }
     }
 
-    private String chooseNewHost(String oldHost) {
+    private String getNewIp(String oldHost) {
         int idx = vmHosts.indexOf(oldHost);
         if (idx == -1) {
             return vmHosts.get(0);
@@ -146,7 +160,7 @@ public class RainStormLeader {
             return;
         }
 
-        String newHost = chooseNewHost(old.host);
+        String newHost = getNewIp(old.host);
         TaskInfo updated = new TaskInfo(old.globalTaskId, old.stageIdx, old.idxWithinStage, newHost);
         tasks.put(failedTaskId, updated);
         sendRoutingFileToTask(updated);
@@ -195,5 +209,108 @@ public class RainStormLeader {
         LeaderLoggerHelper.taskFail(failedTaskInfo.idxWithinStage,failedTaskInfo.globalTaskId,failedTaskInfo.host);
         //TODO: what you wanna do after logging?
         restartFailedTask(req.getFailedTaskId());
+    }
+
+    public void processWorkerTaskLoad(WorkerTaskLoad req){
+        workerTaskLoad.put(req.getTaskIdx(), req.getTuplesCount());
+    }
+
+    private void adjustLoad() {
+        while (autoscaleEnabled) {
+            try {
+                Thread.sleep(1000);
+                processLoad();
+            } catch (Exception ignored) {}
+        }
+    }
+
+    private void processLoad() {
+        for (int stage = 0; stage < numStages; stage++) {
+            //TODO: SKIP AUTO-SCALING DURING AGGREGATE?
+            if ("aggregate".equals(chooseOperator(stage))) continue;
+            long total = 0;
+            int count = 0;
+            for (TaskInfo t : tasks.values()) {
+                if (t.stageIdx == stage) {
+                    total += workerTaskLoad.getOrDefault(t.globalTaskId, 0L);
+                    count++;
+                }
+            }
+            if (count == 0) continue;
+            long avg = total / count;
+            if (avg < lw && count > 1) {
+                scaleDown(stage);
+            } else if (avg > hw) {
+                scaleUp(stage);
+            }
+        }
+    }
+
+    private void scaleUp(int stage) {
+        int newTaskId = tasks.keySet().stream().mapToInt(x -> x).max().orElse(-1) + 1;
+        String newHost = vmHosts.get(newTaskId % vmHosts.size());
+        int idxWithinStage = 0;
+        for (TaskInfo t : tasks.values()) {
+            if (t.stageIdx == stage) {
+                idxWithinStage++;
+            }
+        }
+
+        TaskInfo ti = new TaskInfo(newTaskId,stage,idxWithinStage,newHost);
+        tasks.put(newTaskId, ti);
+        LeaderLoggerHelper.taskStart(stage,newTaskId,newHost);
+        sendRoutingFileToTask(ti);
+
+        if (stage > 0) {
+            int upstreamStage = stage - 1;
+            for (TaskInfo t : tasks.values()) {
+                if (t.stageIdx == upstreamStage) {
+                    sendRoutingFileToTask(t);
+                }
+            }
+        }
+        launchSingleWorkerTask(ti);
+    }
+
+    private void scaleDown(int stage) {
+        TaskInfo taskToBeKilled = null;
+        for (TaskInfo t : tasks.values()) {
+            if (t.stageIdx == stage) {
+                if (taskToBeKilled == null || t.globalTaskId > taskToBeKilled.globalTaskId) {
+                    taskToBeKilled = t;
+                }
+            }
+        }
+        if (taskToBeKilled == null) return;
+        boolean killSuccess = false;
+        int workerTaskIdToBeKilled = taskToBeKilled.globalTaskId;
+
+        try (Socket socket = new Socket(taskToBeKilled.host, WORKER_PORT);
+             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
+        ) {
+            out.writeObject(new KillWorkerTask(workerTaskIdToBeKilled));
+            out.flush();
+            WorkerTaskKillAckRequest ack = (WorkerTaskKillAckRequest) in.readObject();
+            killSuccess = ack.isKilled();
+        } catch (Exception e) {
+            System.err.println("Failed to send KillWorkerTask request for task " + workerTaskIdToBeKilled);
+            return;
+        }
+        if (!killSuccess) {
+            System.err.println("Leader: Kill NOT confirmed for task " + workerTaskIdToBeKilled + ". Aborting scale-down.");
+            return;
+        }
+        tasks.remove(workerTaskIdToBeKilled);
+        workerTaskLoad.remove(workerTaskIdToBeKilled);
+        if (stage > 0) {
+            int upstreamStage = stage-1;
+            for (TaskInfo t : tasks.values()) {
+                if (t.stageIdx == upstreamStage) {
+                    sendRoutingFileToTask(t);
+                }
+            }
+        }
+        LeaderLoggerHelper.taskScaleDown(stage, workerTaskIdToBeKilled, taskToBeKilled.host);
     }
 }

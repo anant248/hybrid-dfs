@@ -34,6 +34,9 @@ public class WorkerTask {
 
     HyDFS hdfs = GlobalHyDFS.hdfs;
     private static final List<String> ips = Arrays.asList("vm1","vm2","vm3","vm4","vm5","vm6","vm7","vm8","vm9","vm10");
+
+    private final AtomicLong tuplesCount = new AtomicLong(0);
+
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(WorkerTask.class);
 
     static class PendingTuple implements Serializable {
@@ -110,6 +113,7 @@ public class WorkerTask {
         startInputServer();
         startRetryThread();
         startAckServer();
+        sendLoadStatusToLeader();
     }
 
     private void launchOperator() throws IOException {
@@ -158,26 +162,33 @@ public class WorkerTask {
 
     private void forwardTuple(String tuple) {
         for (DownstreamTarget t : downstream) {
+            String tupleId = null;
             try (Socket socket = new Socket(t.host, t.port);
                  BufferedWriter w = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()))) {
                 ObjectNode js = (ObjectNode) mapper.readTree(tuple);
+                tupleId = js.get("id").asText();
                 js.put("srcTask", taskId);
                 String newTuple = js.toString();
-                String tupleId = js.get("id").asText();
                 pendingTuples.put(tupleId, new PendingTuple(tupleId, newTuple));
                 w.write(newTuple + "\n");
                 w.flush();
             } catch (Exception e) {
                 logger.error("Task {}: failed to send tuple to downstream task {} at {}:{}", taskId, t.getTaskId(), t.host, t.port, e);
-                WorkerTaskFailRequest req = new WorkerTaskFailRequest(taskId,t.getTaskId());
-                try(Socket socket = new Socket(leaderIp, leaderPort);
-                    ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-                ){
-                    out.writeObject(req);
-                    out.flush();
-                    logger.info("Task {} notified leader {}:{} of failure of {}", taskId, leaderIp, leaderPort, t.getTaskId());
-                } catch (Exception err){
-                    logger.error("Task {}: failed to notify leader", taskId, err);
+
+                PendingTuple p = pendingTuples.get(tupleId);
+                if (p != null) {
+                    if (p.retryCount > 5) {
+                        WorkerTaskFailRequest req = new WorkerTaskFailRequest(taskId,t.getTaskId());
+                        try(Socket socket = new Socket(leaderIp, leaderPort);
+                            ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+                        ){
+                            out.writeObject(req);
+                            out.flush();
+                            logger.info("Task {} notified leader {}:{} of failure of {}", taskId, leaderIp, leaderPort, t.getTaskId());
+                        } catch (Exception err){
+                            logger.error("Task {}: failed to notify leader", taskId, err);
+                        }
+                    }
                 }
             }
         }
@@ -246,6 +257,7 @@ public class WorkerTask {
         try (BufferedReader r = new BufferedReader(new InputStreamReader(client.getInputStream()))) {
             String line;
             while ((line = r.readLine()) != null) {
+                tuplesCount.incrementAndGet();
                 if (stageIdx == 0) {
                     long id = generateTupleId();
                     ObjectNode tuple = mapper.createObjectNode();
@@ -358,6 +370,33 @@ public class WorkerTask {
             logger.debug("Task {} received ACK for tuple {}, removing from pending tuples map", taskId, tupleId);
         } catch (Exception e) {
             logger.error("Task {} failed to handle ACK", taskId, e);
+        }
+    }
+
+    private void sendLoadStatusToLeader() {
+        Thread reporter = new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(1000);
+                    long count = tuplesCount.getAndSet(0);
+                    WorkerTaskLoad report = new WorkerTaskLoad(taskId, stageIdx, count);
+                    sendLoadStatus(report);
+                } catch (Exception e) {
+                    logger.error("Task {} load reporter crashed", taskId, e);
+                }
+            }
+        });
+        reporter.setDaemon(true);
+        reporter.start();
+    }
+
+    private void sendLoadStatus(WorkerTaskLoad rep) {
+        try (Socket sock = new Socket(leaderIp, leaderPort);
+             ObjectOutputStream out = new ObjectOutputStream(sock.getOutputStream())) {
+            out.writeObject(rep);
+            out.flush();
+        } catch (Exception e) {
+            logger.error("Task {} failed sending load report to leader {}:{}", taskId, leaderIp, leaderPort, e);
         }
     }
 }
