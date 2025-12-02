@@ -1,15 +1,16 @@
 package com.uiuc.systems;
 
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import java.io.*;
 import java.net.Socket;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class RainStormLeader {
     public static final int LEADER_PORT = 7777;
@@ -21,12 +22,18 @@ public class RainStormLeader {
     private final int inputRate;
     private final int lw;
     private final int hw;
+    private final String hdfsSourceFileName;
+    private final String hdfsDestFileName;
 
     private final String leaderHost;
 
     private final List<String> vmHosts = Arrays.asList("vm1", "vm2", "vm3", "vm4", "vm5", "vm6", "vm7", "vm8", "vm9", "vm10");
 
     private final ConcurrentMap<Integer, Long> workerTaskLoad = new ConcurrentHashMap<>();
+
+    private final AtomicLong nextGlobalTupleId = new AtomicLong(0);
+
+    HyDFS hdfs = GlobalHyDFS.hdfs;
 
     static class TaskInfo {
         final int globalTaskId;
@@ -44,7 +51,7 @@ public class RainStormLeader {
 
     private final Map<Integer, TaskInfo> tasks = new HashMap<>();
 
-    private RainStormLeader(String leaderHost, int numStages, int numTasks, boolean exactlyOnce, boolean autoscaleEnabled, int inputRate, int lw, int hw) {
+    private RainStormLeader(String leaderHost, int numStages, int numTasks, boolean exactlyOnce, boolean autoscaleEnabled, int inputRate, int lw, int hw, String hdfsSourceFileName, String hdfsDestFileName) {
         this.numStages = numStages;
         this.numTasks = numTasks;
         this.exactlyOnce = exactlyOnce;
@@ -53,6 +60,8 @@ public class RainStormLeader {
         this.lw = lw;
         this.hw = hw;
         this.leaderHost = leaderHost;
+        this.hdfsSourceFileName = hdfsSourceFileName;
+        this.hdfsDestFileName = hdfsDestFileName;
     }
 
 //    private static RainStormLeader parseArgs(String[] args) {
@@ -81,6 +90,7 @@ public class RainStormLeader {
             rm.start();
         }
         Thread.sleep(2000);
+        new Thread(() -> runSourceProcess(hdfsSourceFileName,hdfsDestFileName)).start();
         LeaderLoggerHelper.runEnd("OK");
     }
     private void initializeTasks() {
@@ -96,6 +106,69 @@ public class RainStormLeader {
             }
         }
     }
+
+    private void runSourceProcess(String hdfsSourceFileName,String hdfsDestFileName) {
+        try {
+            String hdfsFile = hdfsSourceFileName;
+            String localTmp = hdfsDestFileName;
+
+            boolean ok = hdfs.getHyDFSFileToLocalFileFromOwner(hdfsFile, localTmp);
+            if (!ok) {
+                System.err.println("SourceProcess: no input found in HyDFS at " + hdfsFile);
+                return;
+            }
+
+            List<String> lines = Files.readAllLines(Paths.get("output/" + localTmp));
+            int stage0Tasks = 0;
+            List<TaskInfo> stage0List = new ArrayList<>();
+
+            for (TaskInfo t : tasks.values()) {
+                if (t.stageIdx == 0) {
+                    stage0List.add(t);
+                    stage0Tasks++;
+                }
+            }
+
+            if (stage0Tasks == 0) {
+                System.err.println("No tasks in Stage 0 — cannot source.");
+                return;
+            }
+
+            ObjectMapper mapper = new ObjectMapper();
+            long sleepMicros = (long)(1_000_000.0 / inputRate);
+
+            int lineNumber = 0;
+            for (String line : lines) {
+                long tid = nextGlobalTupleId.getAndIncrement();
+                ObjectNode js = mapper.createObjectNode();
+                js.put("id", tid);
+                js.put("key", hdfsFile + ":" + lineNumber);
+                js.put("line", line);
+                js.put("srcTask", -1);
+                int idx = lineNumber % stage0Tasks;
+                TaskInfo target = stage0List.get(idx);
+
+                String host = target.host;
+                int port = 9000 + target.globalTaskId;
+
+                try (Socket sock = new Socket(host, port);
+                     BufferedWriter w = new BufferedWriter(new OutputStreamWriter(sock.getOutputStream()))) {
+                    w.write(js.toString() + "\n");
+                    w.flush();
+                } catch (Exception e) {
+                    System.err.println("SourceProcess failed to send tuple to Stage0 task " + target.globalTaskId);
+                }
+                lineNumber++;
+                Thread.sleep(0, (int)sleepMicros);
+            }
+
+            System.out.println("SourceProcess: finished streaming all input lines.");
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
 
     private void distributeRoutingFiles() {
         for (TaskInfo t : tasks.values()) {
