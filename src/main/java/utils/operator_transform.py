@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import json
+import csv
 
 if len(sys.argv) < 1:
     sys.stderr.write("Usage: operator_transform.py\n")
@@ -8,10 +9,14 @@ if len(sys.argv) < 1:
 
 def transform(t):
     line = t.get("line", "")
-    parts = line.split(",")
+
+    # use CSV reader to correctly handle commas inside quotes
+    parts = next(csv.reader([line]))
+
     trimmed = parts[:3]
-    t["line"] = ",".join(trimmed)
-    return t
+    new_t = dict(t)
+    new_t["line"] = ",".join(trimmed)
+    return new_t
 
 for line in sys.stdin:
     try:

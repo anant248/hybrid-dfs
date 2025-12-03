@@ -289,17 +289,51 @@ public class HyDFS {
         }
     }
 
+    /* Sends an append request from client to owner to append a raw tuple (already in-memory),
+     * instead of reading from a local file. Used by MP4 worker final stage.
+     */
+    private boolean sendAppendTupleRequestToOwner(String hdfsFileName, String tuple) {
+        List<NodeId> hdfsFileReplicas = verifyExistingReplicas(ring.getReplicas(hdfsFileName), hdfsFileName);
+
+        if (hdfsFileReplicas.size() == 0) {
+            return false;
+        }
+
+        NodeId owner = hdfsFileReplicas.get(0);
+        String ownerIp = owner.getIp();
+
+        try (Socket socket = new Socket(ownerIp, PORT)) {
+            ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+            ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
+
+            // Convert tuple to bytes
+            byte[] tupleData = (tuple + "\n").getBytes(StandardCharsets.UTF_8);
+
+            AppendRequest ownerAppendRequest = new AppendRequest(tupleData, hdfsFileName);
+
+            out.writeObject(ownerAppendRequest);
+            out.flush();
+
+            String response = (String) in.readObject();
+            return response.equals("ACK");
+        } catch (Exception e) {
+            logger.error("AppendTuple incomplete with issue: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+
     /**
      * Used by MP4 Stream Processor final stage task
      * Append the given tuple to the specified HyDFS file
      */
     public boolean appendTuple(String hdfsFileName, String tuple) {
         try {
-            // Convert tuple to bytes
-            byte[] data = (tuple + "\n").getBytes(StandardCharsets.UTF_8);
-
+            
             // Forward request to file owner
-            return sendAppendTupleRequestToOwner(hdfsFileName, data);
+            return sendAppendTupleRequestToOwner(hdfsFileName, tuple);
+
         } catch (Exception e) {
             System.err.println("HyDFS appendTuple error: " + e.getMessage());
             return false;

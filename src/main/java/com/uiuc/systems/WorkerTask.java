@@ -34,7 +34,7 @@ public class WorkerTask {
     private static final ObjectMapper mapper = new ObjectMapper();
 
     HyDFS hdfs = GlobalHyDFS.hdfs;
-    private static final List<String> ips = Arrays.asList("vm1","vm2","vm3","vm4","vm5","vm6","vm7","vm8","vm9","vm10");
+    private static final List<String> ips = Arrays.asList("vm2","vm3","vm4","vm5","vm6","vm7","vm8","vm9","vm10");
     private static final String OUTPUT_FILE = "stream_out.txt";
 
     private final AtomicLong tuplesCount = new AtomicLong(0);
@@ -47,11 +47,11 @@ public class WorkerTask {
         volatile long lastSentTime;
         volatile int retryCount;
 
-        PendingTuple(String tupleId, String json) {
+        PendingTuple(String tupleId, String json, int retryCount) {
             this.tupleId = tupleId;
             this.json = json;
             this.lastSentTime = System.currentTimeMillis();
-            this.retryCount = 0;
+            this.retryCount = retryCount;
         }
     }
 
@@ -81,8 +81,6 @@ public class WorkerTask {
                 logger.error("Task {}: failed to create HyDFS log file {}", taskId, taskLogPath, e);
             }
         }
-
-        //TODO: CHECK IF THE LOG FILE SHOULD BE CREATED FIRST IN HYDFS FOR APPENDS TO WORK
     }
 
     public static void main(String[] args) throws Exception {
@@ -164,7 +162,7 @@ public class WorkerTask {
                 } 
                 // else, forward to downstream tasks
                 else {
-                    forwardTuple(line);
+                    forwardTuple(line, 0); // initial retry count 0
                 }
             }
         } catch (Exception e) {
@@ -172,38 +170,31 @@ public class WorkerTask {
         }
     }
 
-    private void forwardTuple(String output) {
+    private void forwardTuple(String output, int retryCount) {
         try {
+            // parse output JSON
             ObjectNode js = (ObjectNode) mapper.readTree(output);
-            String tupleId = js.get("id").asText();
+
+            // add source task ID
             js.put("srcTask", taskId);
+
+            // extract tuple ID
+            String tupleId = js.get("id").asText();
             String newJson = js.toString();
-            pendingTuples.put(tupleId, new PendingTuple(tupleId, newJson));
 
-            for (DownstreamTarget t : downstream) {
-                try (Socket socket = new Socket(t.host, t.port);
-                     BufferedWriter w = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()))) {
-                    w.write(newJson + "\n");
-                    w.flush();
-                } catch (Exception e) {
-                    logger.error("Task {}: failed to send tuple to downstream task {} at {}:{}", taskId, t.getTaskId(), t.host, t.port, e);
+            // add to pending tuples map to track for ACKs
+            pendingTuples.put(tupleId, new PendingTuple(tupleId, newJson, retryCount));
 
-//                    PendingTuple p = pendingTuples.get(tupleId);
-//                    if (p != null) {
-//                        if (p.retryCount > 5) {
-//                            WorkerTaskFailRequest req = new WorkerTaskFailRequest(taskId, t.getTaskId());
-//                            try (Socket socket = new Socket(leaderIp, leaderPort);
-//                                 ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-//                            ) {
-//                                out.writeObject(req);
-//                                out.flush();
-//                                logger.info("Task {} notified leader {}:{} of failure of {}", taskId, leaderIp, leaderPort, t.getTaskId());
-//                            } catch (Exception err) {
-//                                logger.error("Task {}: failed to notify leader", taskId, err);
-//                            }
-//                        }
-//                    }
-                }
+            // choose downstream target based on hash of tuple ID
+            int idx = hash(tupleId).mod(BigInteger.valueOf(downstream.size())).intValue();
+            DownstreamTarget target = downstream.get(idx);
+
+            // Send to exactly one downstream target
+            try (Socket socket = new Socket(target.host, target.port);
+                BufferedWriter w = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()))) {
+
+                w.write(newJson + "\n");
+                w.flush();
             }
         } catch(Exception e){
             logger.error("Failed to forward the tuple from task {}",taskId,e);
@@ -242,57 +233,38 @@ public class WorkerTask {
         retryThread.start();
     }
 
-//    private void retrySend(PendingTuple p) {
-//        logger.info("Task {} retrying tuple {} retryCount={}", taskId, p.tupleId, p.retryCount);
-//        for (DownstreamTarget t : downstream) {
-//            try (Socket socket = new Socket(t.host, t.port);
-//                 BufferedWriter w = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()))) {
-//                w.write(p.json + "\n");
-//                w.flush();
-//                p.lastSentTime = System.currentTimeMillis();
-//                p.retryCount++;
-//            } catch (Exception e) {
-//                logger.error("Retry failed for tuple {} to downstream {}", p.tupleId, t.getTaskId());
-//            }
-//        }
-//    }
-
     private void retrySend(PendingTuple p) {
+        // first check if we have exceeded max retries
+        if (p.retryCount >= MAX_RETRIES) {
+            // get the downstream target this tuple is supposed to go to
+            int idx = hash(p.tupleId).mod(BigInteger.valueOf(downstream.size())).intValue();
+            DownstreamTarget target = downstream.get(idx);
+            
+            // notify leader that the downstream task has likely failed since we couldnt reach it after max retries
+            WorkerTaskFailRequest req = new WorkerTaskFailRequest(taskId, target.getTaskId());
+            try (Socket socket = new Socket(leaderIp, leaderPort);
+                 ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
+                
+                out.writeObject(req);
+                out.flush();
+                logger.info("Task {} notified leader {}:{} of failure of downstream task {} on host {} and port {}", taskId, leaderIp, leaderPort, target.getTaskId(), target.getHost(), target.getPort());
+                return; // exit after notifying leader
+            } catch (Exception err) {
+                logger.error("Task {}: failed to notify leader about failure of downstream task {}", taskId, target.getTaskId(), err);
+                return; // exit even if notification fails
+            }
+        }
+
+        // otherwise proceed with retrying the send
         logger.info("Task {} retrying tuple {} (attempt #{})", taskId, p.tupleId, p.retryCount + 1);
 
-        boolean anyFailure = false;
-        List<DownstreamTarget> failedThisAttempt = new ArrayList<>();
+        // try forwarding the tuple again
+        forwardTuple(p.json, p.retryCount + 1);
 
-        for (DownstreamTarget t : downstream) {
-            try (Socket socket = new Socket(t.host, t.port);
-                 BufferedWriter w = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()))) {
-
-                w.write(p.json + "\n");
-                w.flush();
-
-            } catch (Exception e) {
-                anyFailure = true;
-                failedThisAttempt.add(t);
-                logger.error("Retry failed for tuple {} to downstream {} at {}:{}", p.tupleId, t.getTaskId(), t.host, t.port, e);
-            }
-        }
+        // we might not even need to update these here since forwardTuple creates a new PendingTuple entry
+        // but we do it here to keep the retryCount accurate in case of failures
         p.lastSentTime = System.currentTimeMillis();
         p.retryCount++;
-
-        if (anyFailure && p.retryCount > MAX_RETRIES) {
-            for (DownstreamTarget t : failedThisAttempt) {
-                WorkerTaskFailRequest req = new WorkerTaskFailRequest(taskId, t.getTaskId());
-                try (Socket socket = new Socket(leaderIp, leaderPort);
-                     ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
-                    out.writeObject(req);
-                    out.flush();
-                    logger.info("Task {} notified leader {}:{} of failure of downstream {}", taskId, leaderIp, leaderPort, t.getTaskId());
-
-                } catch (Exception err) {
-                    logger.error("Task {}: failed to notify leader about failure of downstream {}", taskId, t.getTaskId(), err);
-                }
-            }
-        }
     }
 
     private void handleClient(Socket client) {
@@ -303,10 +275,10 @@ public class WorkerTask {
                 JsonNode js = mapper.readTree(line);
                 String tupleId = js.get("id").asText();
                 int upstreamTask = js.get("srcTask").asInt();
-                String tupleData = js.get("line").asText();
                 if (seenInputTuples.contains(tupleId)) {
                     logger.debug("Task {} dropping duplicate tuple {}", taskId, tupleId);
-                    //TODO: SEND AN ACK EVEN IN THE CASE OF DUPLICATES
+                    
+                    // ack back to upstream even in case of duplicate
                     sendAck(upstreamTask, tupleId);
                     continue;
                 }
@@ -315,7 +287,7 @@ public class WorkerTask {
                 seenInputTuples.add(tupleId);
                 appendToTaskLog("INPUT " + tupleId);
                 // forward to operator stdin
-                opStdin.write(tupleData + "\n");
+                opStdin.write(line + "\n");
                 opStdin.flush();
                 sendAck(upstreamTask,tupleId);
                 }
@@ -348,7 +320,8 @@ public class WorkerTask {
     private boolean rebuildStateFromLog() {
         try {
             String hdfsName = taskLogPath;
-            //TODO: CHECK IF THE OUTPUT FILE STORED AS .log or .txt
+
+            // download log file from HyDFS to local
             String localName = "task_" + taskId + "_log_local.txt";
 
             boolean ok = hdfs.getHyDFSFileToLocalFileFromOwner(hdfsName, localName);
@@ -449,7 +422,7 @@ public class WorkerTask {
 }
 
 // Stub for fetching routing info
-// TODO: get list of subsequent tasks from leader for this taskId
+// get list of subsequent tasks from leader for this taskId
 // eg. task 2 -> tasks 5,6,7
 class RoutingLoader {
     public static List<DownstreamTarget> load(int taskId) {

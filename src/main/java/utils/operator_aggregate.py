@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import json
+import csv
 from collections import defaultdict
 
 if len(sys.argv) < 2:
@@ -21,16 +22,22 @@ def update(key, value):
 for line in sys.stdin:
     try:
         tup = json.loads(line.strip())
-
         line = tup.get("line", "")
-        parts = line.split(",")
+
+        # use CSV reader to correctly handle commas inside quotes
+        parts = next(csv.reader([line]))
+
         if COL_IDX < len(parts):
             key = parts[COL_IDX]
         else:
-            key = ""
+            key = "" # handle missing column
+            
         key = key if key != "" else ""
         agg_val = update(key, 1)
-        out = {"key": key, "count": agg_val}
+        
+        out = dict(tup)
+        out["agg_key"] = key
+        out["count"] = agg_val
         
         sys.stdout.write(json.dumps(out) + "\n")
         sys.stdout.flush()

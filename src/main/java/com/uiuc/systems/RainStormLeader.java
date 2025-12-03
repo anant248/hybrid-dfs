@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.*;
 import java.net.Socket;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -79,7 +78,6 @@ public class RainStormLeader {
         LeaderLoggerHelper.runEnd("OK");
     }
     private void initializeTasks() {
-//        List<String> ips = Arrays.asList("vm1", "vm2", "vm3", "vm4", "vm5", "vm6","vm7","vm8","vm9","vm10");
         int id = 0;
         for (int stage = 0; stage < numStages; stage++) {
             for (int i = 0; i < numTasks; i++) {
@@ -94,7 +92,6 @@ public class RainStormLeader {
 
     private void runSourceProcess(String localInput) {
         try {
-            // List<String> lines = Files.readAllLines(Paths.get("inputs/" + localInput));
             int stage0Tasks = 0;
             List<TaskInfo> stage0List = new ArrayList<>();
 
@@ -127,6 +124,7 @@ public class RainStormLeader {
 
             int lineNum = 0;
             ObjectMapper mapper = new ObjectMapper();
+            long sleepMicros = (long)(1_000_000.0 / inputRate); // enforce input rate
 
             try (BufferedReader br = new BufferedReader(new FileReader(Paths.get("inputs/" + localInput).toString()))) {
                 String line;
@@ -147,6 +145,7 @@ public class RainStormLeader {
                     w.flush();
 
                     lineNum++;
+                    Thread.sleep(0, (int)sleepMicros);
                 }
 
             } catch (Exception e) {
@@ -162,37 +161,7 @@ public class RainStormLeader {
         catch (Exception e) {
             e.printStackTrace();
         }
-            
-            // ObjectMapper mapper = new ObjectMapper();
-            // long sleepMicros = (long)(1_000_000.0 / inputRate);
-
-            // int lineNumber = 0;
-            // for (String line : lines) {
-            //     long tid = nextGlobalTupleId.getAndIncrement();
-            //     ObjectNode js = mapper.createObjectNode();
-            //     js.put("id", tid);
-            //     js.put("key", localInput + ":" + lineNumber);
-            //     js.put("line", line);
-            //     js.put("srcTask", -1);
-            //     int idx = lineNumber % stage0Tasks;
-            //     TaskInfo target = stage0List.get(idx);
-
-            //     String host = target.host;
-            //     int port = 9000 + target.globalTaskId;
-
-            //     try (Socket sock = new Socket(host, port);
-            //          BufferedWriter w = new BufferedWriter(new OutputStreamWriter(sock.getOutputStream()))) {
-            //         w.write(js.toString() + "\n");
-            //         w.flush();
-            //     } catch (Exception e) {
-            //         System.err.println("SourceProcess failed to send tuple to Stage0 task " + target.globalTaskId);
-            //     }
-            //     lineNumber++;
-            //     Thread.sleep(0, (int)sleepMicros);
-            // }
-
     }
-
 
     private void distributeRoutingFiles() {
         for (TaskInfo t : tasks.values()) {

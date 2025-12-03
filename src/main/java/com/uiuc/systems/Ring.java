@@ -5,12 +5,8 @@ import java.security.MessageDigest;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 public class Ring {
 
-    private static final Logger logger = LoggerFactory.getLogger(Ring.class);
     private  TreeMap<BigInteger, NodeId> ring;
     private static final int NUM_REPLICAS = 5;
     private static final int QUORUM = 3;
