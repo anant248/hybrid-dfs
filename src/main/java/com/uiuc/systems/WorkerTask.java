@@ -5,9 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.*;
+import java.math.BigInteger;
 import java.net.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -33,6 +35,7 @@ public class WorkerTask {
 
     HyDFS hdfs = GlobalHyDFS.hdfs;
     private static final List<String> ips = Arrays.asList("vm1","vm2","vm3","vm4","vm5","vm6","vm7","vm8","vm9","vm10");
+    private static final String OUTPUT_FILE = "stream_out.txt";
 
     private final AtomicLong tuplesCount = new AtomicLong(0);
 
@@ -67,13 +70,24 @@ public class WorkerTask {
         this.downstream.addAll(downstream);
         this.stageIdx = stageIdx;
         this.taskLogPath = "/append_log/rainstorm_task_" + taskId + ".log";
-        rebuildStateFromLog();
+        boolean logFileExists = rebuildStateFromLog();
+
+        // if rebuildState was false, create an empty log file in HyDFS, otherwise the appends will fail
+        // if rebuildState was true, the log file already exists
+        if (!logFileExists) {
+            try {
+                hdfs.sendCreateRequestToOwner("starting_log.log", taskLogPath);
+            } catch (Exception e) {
+                logger.error("Task {}: failed to create HyDFS log file {}", taskId, taskLogPath, e);
+            }
+        }
+
         //TODO: CHECK IF THE LOG FILE SHOULD BE CREATED FIRST IN HYDFS FOR APPENDS TO WORK
     }
 
     public static void main(String[] args) throws Exception {
         if (args.length < 3) {
-            System.err.println("Usage: WorkerTask <taskId> <operatorType> <isFinal> <operatorArgs...>");
+            System.err.println("Usage: WorkerTask <leader IP> <leader port> <taskId> <stageIdx> <operatorType> <isFinal> [operatorArgs...]");
             return;
         }
 
@@ -107,9 +121,9 @@ public class WorkerTask {
         new Thread(this::stdoutReaderLoop).start();
 
         // Start input listener (TCP)
+        startAckServer();
         startInputServer();
         startRetryThread();
-        startAckServer();
         sendLoadStatusToLeader();
     }
 
@@ -144,8 +158,9 @@ public class WorkerTask {
                 // if final task, write to HyDFS (stubbed here)
                 if (isFinal) {
                     System.out.println(line);
-                    //TODO: fix append call, add a new line
-                    hdfs.appendToHyDFS("stream_out.txt", line);
+                    
+                    // write out to final output file in HyDFS 
+                    hdfs.appendTuple(OUTPUT_FILE, line + "\n");
                 } 
                 // else, forward to downstream tasks
                 else {
@@ -280,15 +295,6 @@ public class WorkerTask {
         }
     }
 
-    //    private void handleClient(Socket client) {
-//        try (BufferedReader r = new BufferedReader(new InputStreamReader(client.getInputStream()))) {
-//            String line;
-//            while ((line = r.readLine()) != null) {
-//                opStdin.write(line + "\n");
-//                opStdin.flush();
-//            }
-//        } catch (Exception ignored) {}
-//    }
     private void handleClient(Socket client) {
         try (BufferedReader r = new BufferedReader(new InputStreamReader(client.getInputStream()))) {
             String line;
@@ -297,15 +303,19 @@ public class WorkerTask {
                 JsonNode js = mapper.readTree(line);
                 String tupleId = js.get("id").asText();
                 int upstreamTask = js.get("srcTask").asInt();
+                String tupleData = js.get("line").asText();
                 if (seenInputTuples.contains(tupleId)) {
                     logger.debug("Task {} dropping duplicate tuple {}", taskId, tupleId);
                     //TODO: SEND AN ACK EVEN IN THE CASE OF DUPLICATES
                     sendAck(upstreamTask, tupleId);
                     continue;
                 }
+
+                // add to seen set and log
                 seenInputTuples.add(tupleId);
                 appendToTaskLog("INPUT " + tupleId);
-                opStdin.write(line + "\n");
+                // forward to operator stdin
+                opStdin.write(tupleData + "\n");
                 opStdin.flush();
                 sendAck(upstreamTask,tupleId);
                 }
@@ -335,16 +345,16 @@ public class WorkerTask {
         return ips.get(taskId%ips.size());
     }
 
-    private void rebuildStateFromLog() {
+    private boolean rebuildStateFromLog() {
         try {
-            String hdfsName = "rainstorm_task_" + taskId + ".log";
+            String hdfsName = taskLogPath;
             //TODO: CHECK IF THE OUTPUT FILE STORED AS .log or .txt
             String localName = "task_" + taskId + "_log_local.txt";
 
             boolean ok = hdfs.getHyDFSFileToLocalFileFromOwner(hdfsName, localName);
             if (!ok) {
                 logger.info("No prior log found for task {}", taskId);
-                return;
+                return false;
             }
             List<String> lines = Files.readAllLines(Paths.get("output/" + localName));
             for (String line : lines) {
@@ -355,15 +365,18 @@ public class WorkerTask {
             }
             logger.info("Task {} rebuilt state: {} tuples", taskId, seenInputTuples.size());
 
+            return true;
+
         } catch (Exception e) {
             logger.error("Task {} failed to rebuild state", taskId, e);
+            return false;
         }
     }
 
     private void appendToTaskLog(String logLine) {
         try {
-            //TODO: fix append call
-            hdfs.appendToHyDFS(taskLogPath, logLine + "\n");
+            // append to the tasks log file in HyDFS
+            hdfs.appendTuple(taskLogPath, logLine + "\n");
         } catch (Exception e) {
             logger.error("Task {}: failed to append to HyDFS log {}", taskId, taskLogPath, e);
         }
@@ -420,6 +433,17 @@ public class WorkerTask {
             out.flush();
         } catch (Exception e) {
             logger.error("Task {} failed sending load report to leader {}:{}", taskId, leaderIp, leaderPort, e);
+        }
+    }
+
+    // hash function using SHA-1 consistent hashing. Returns the hash as a BigInteger so its easy to compare
+    private BigInteger hash(String key) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-1");
+            byte[] bytes = md.digest(key.getBytes());
+            return new BigInteger(1, bytes);
+        } catch (Exception e) {
+            throw new RuntimeException("Error computing SHA-1 hash", e);
         }
     }
 }

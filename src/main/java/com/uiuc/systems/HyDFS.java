@@ -290,7 +290,7 @@ public class HyDFS {
     }
 
     /**
-     * Used my MP4 Stream Processor final stage task
+     * Used by MP4 Stream Processor final stage task
      * Append the given tuple to the specified HyDFS file
      */
     public boolean appendTuple(String hdfsFileName, String tuple) {

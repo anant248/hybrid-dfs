@@ -22,12 +22,12 @@ public class RainStormLeader {
     private final int inputRate;
     private final int lw;
     private final int hw;
-    private final String hdfsSourceFileName;
-    private final String hdfsDestFileName;
+    private final String localInputFileName;
+    private final List<String> operatorsAndArgs;
 
     private final String leaderHost;
 
-    private final List<String> vmHosts = Arrays.asList("vm1", "vm2", "vm3", "vm4", "vm5", "vm6", "vm7", "vm8", "vm9", "vm10");
+    private final List<String> vmHosts = Arrays.asList( "vm2", "vm3", "vm4", "vm5", "vm6", "vm7", "vm8", "vm9", "vm10");
 
     private final ConcurrentMap<Integer, Long> workerTaskLoad = new ConcurrentHashMap<>();
 
@@ -51,7 +51,7 @@ public class RainStormLeader {
 
     private final Map<Integer, TaskInfo> tasks = new HashMap<>();
 
-    private RainStormLeader(String leaderHost, int numStages, int numTasks, boolean exactlyOnce, boolean autoscaleEnabled, int inputRate, int lw, int hw, String hdfsSourceFileName, String hdfsDestFileName) {
+    private RainStormLeader(String leaderHost, int numStages, int numTasks, boolean exactlyOnce, boolean autoscaleEnabled, int inputRate, int lw, int hw,  List<String> operatorsAndArgs, String localInputFileName) {
         this.numStages = numStages;
         this.numTasks = numTasks;
         this.exactlyOnce = exactlyOnce;
@@ -60,24 +60,9 @@ public class RainStormLeader {
         this.lw = lw;
         this.hw = hw;
         this.leaderHost = leaderHost;
-        this.hdfsSourceFileName = hdfsSourceFileName;
-        this.hdfsDestFileName = hdfsDestFileName;
+        this.operatorsAndArgs = operatorsAndArgs;
+        this.localInputFileName = localInputFileName;
     }
-
-//    private static RainStormLeader parseArgs(String[] args) {
-//        int nStages = Integer.parseInt(args[0]);
-//        int nTasksPerStage = Integer.parseInt(args[1]);
-//        int split = args.length - 7;
-//        boolean exactlyOnce = Boolean.parseBoolean(args[split + 2]);
-//        boolean autoscaleEnabled = Boolean.parseBoolean(args[split + 3]);
-//        int inputRate = Integer.parseInt(args[split + 4]);
-//        int lw = Integer.parseInt(args[split + 5]);
-//        int hw = Integer.parseInt(args[split + 6]);
-//
-//        LeaderLoggerHelper.runStart(String.join(" ", args));
-//        LeaderLoggerHelper.config(nStages, nTasksPerStage, exactlyOnce, autoscaleEnabled, inputRate, lw, hw);
-//        return new RainStormLeader(nStages, nTasksPerStage, exactlyOnce, autoscaleEnabled, inputRate, lw, hw);
-//    }
 
     public void run() throws Exception {
         new Thread(new LeaderServer(this, LEADER_PORT)).start();
@@ -90,7 +75,7 @@ public class RainStormLeader {
             rm.start();
         }
         Thread.sleep(2000);
-        new Thread(() -> runSourceProcess(hdfsSourceFileName,hdfsDestFileName)).start();
+        new Thread(() -> runSourceProcess(localInputFileName)).start();
         LeaderLoggerHelper.runEnd("OK");
     }
     private void initializeTasks() {
@@ -107,18 +92,9 @@ public class RainStormLeader {
         }
     }
 
-    private void runSourceProcess(String hdfsSourceFileName,String hdfsDestFileName) {
+    private void runSourceProcess(String localInput) {
         try {
-            String hdfsFile = hdfsSourceFileName;
-            String localTmp = hdfsDestFileName;
-
-            boolean ok = hdfs.getHyDFSFileToLocalFileFromOwner(hdfsFile, localTmp);
-            if (!ok) {
-                System.err.println("SourceProcess: no input found in HyDFS at " + hdfsFile);
-                return;
-            }
-
-            List<String> lines = Files.readAllLines(Paths.get("output/" + localTmp));
+            // List<String> lines = Files.readAllLines(Paths.get("inputs/" + localInput));
             int stage0Tasks = 0;
             List<TaskInfo> stage0List = new ArrayList<>();
 
@@ -134,39 +110,87 @@ public class RainStormLeader {
                 return;
             }
 
+
+            // for each task in stage0List, open a socket and keep it open
+            List<Socket> sockets = new ArrayList<>();
+            List<BufferedWriter> writers = new ArrayList<>();
+
+            for (TaskInfo t : stage0List) {
+                try {
+                    Socket s = new Socket(t.host, 9000 + t.globalTaskId);
+                    sockets.add(s);
+                    writers.add(new BufferedWriter(new OutputStreamWriter(s.getOutputStream())));
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
+            int lineNum = 0;
             ObjectMapper mapper = new ObjectMapper();
-            long sleepMicros = (long)(1_000_000.0 / inputRate);
 
-            int lineNumber = 0;
-            for (String line : lines) {
-                long tid = nextGlobalTupleId.getAndIncrement();
-                ObjectNode js = mapper.createObjectNode();
-                js.put("id", tid);
-                js.put("key", hdfsFile + ":" + lineNumber);
-                js.put("line", line);
-                js.put("srcTask", -1);
-                int idx = lineNumber % stage0Tasks;
-                TaskInfo target = stage0List.get(idx);
+            try (BufferedReader br = new BufferedReader(new FileReader(Paths.get("inputs/" + localInput).toString()))) {
+                String line;
+                while ((line = br.readLine()) != null) {
 
-                String host = target.host;
-                int port = 9000 + target.globalTaskId;
+                    int target = lineNum % stage0Tasks;
+                    BufferedWriter w = writers.get(target);
 
-                try (Socket sock = new Socket(host, port);
-                     BufferedWriter w = new BufferedWriter(new OutputStreamWriter(sock.getOutputStream()))) {
+                    // Build tuple
+                    long tid = nextGlobalTupleId.getAndIncrement();
+                    ObjectNode js = mapper.createObjectNode();
+                    js.put("id", tid);
+                    js.put("key", localInput + ":" + lineNum);
+                    js.put("line", line);
+                    js.put("srcTask", -1);
+
                     w.write(js.toString() + "\n");
                     w.flush();
-                } catch (Exception e) {
-                    System.err.println("SourceProcess failed to send tuple to Stage0 task " + target.globalTaskId);
+
+                    lineNum++;
                 }
-                lineNumber++;
-                Thread.sleep(0, (int)sleepMicros);
+
+            } catch (Exception e) {
+                e.printStackTrace();
             }
 
             System.out.println("SourceProcess: finished streaming all input lines.");
+            
+            // close the sockets and writers
+            for (BufferedWriter w : writers) w.close();
+            for (Socket s : sockets) s.close();
         }
         catch (Exception e) {
             e.printStackTrace();
         }
+            
+            // ObjectMapper mapper = new ObjectMapper();
+            // long sleepMicros = (long)(1_000_000.0 / inputRate);
+
+            // int lineNumber = 0;
+            // for (String line : lines) {
+            //     long tid = nextGlobalTupleId.getAndIncrement();
+            //     ObjectNode js = mapper.createObjectNode();
+            //     js.put("id", tid);
+            //     js.put("key", localInput + ":" + lineNumber);
+            //     js.put("line", line);
+            //     js.put("srcTask", -1);
+            //     int idx = lineNumber % stage0Tasks;
+            //     TaskInfo target = stage0List.get(idx);
+
+            //     String host = target.host;
+            //     int port = 9000 + target.globalTaskId;
+
+            //     try (Socket sock = new Socket(host, port);
+            //          BufferedWriter w = new BufferedWriter(new OutputStreamWriter(sock.getOutputStream()))) {
+            //         w.write(js.toString() + "\n");
+            //         w.flush();
+            //     } catch (Exception e) {
+            //         System.err.println("SourceProcess failed to send tuple to Stage0 task " + target.globalTaskId);
+            //     }
+            //     lineNumber++;
+            //     Thread.sleep(0, (int)sleepMicros);
+            // }
+
     }
 
 
@@ -199,14 +223,21 @@ public class RainStormLeader {
     }
 
     private void launchAllWorkerTasks() throws Exception {
-        for (TaskInfo t : tasks.values()) {
-            launchSingleWorkerTask(t);
+        for (int i = 0; i < numStages; i++) {
+            // get operator type and args for this task we are starting based on its stage and the initial operatorsAndArgs list
+            String operatorType = getStageOperator(i);
+            List<String> operatorArgs = getStageOperatorArgs(i);
+
+            for (int j = 0; j < numTasks; j++) {
+                TaskInfo t = tasks.get(i * numTasks + j); // get the task based on stage and index within stage
+                launchSingleWorkerTask(t, operatorType, operatorArgs);
+            }
         }
     }
 
-    private void launchSingleWorkerTask(TaskInfo t) {
+    private void launchSingleWorkerTask(TaskInfo t, String operatorType, List<String> operatorArgs) {
         boolean isFinal = (t.stageIdx == numStages - 1);
-        StartWorkerTaskRequest req = new StartWorkerTaskRequest(leaderHost, LEADER_PORT, t.globalTaskId, t.stageIdx, chooseOperator(t.stageIdx), isFinal, operatorArgs(t.stageIdx));
+        StartWorkerTaskRequest req = new StartWorkerTaskRequest(leaderHost, LEADER_PORT, t.globalTaskId, t.stageIdx, operatorType, isFinal, operatorArgs);
 
         try (Socket socket = new Socket(t.host, WORKER_PORT);
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
@@ -224,6 +255,25 @@ public class RainStormLeader {
         }
         int newIdx = (idx + 1) % vmHosts.size();
         return vmHosts.get(newIdx);
+    }
+
+    // given a stage number return the operator type for that stage
+    private String getStageOperator(int stageIdx) {
+        int index = stageIdx * 2; // each stage has 2 entries: operator type and args
+        if (index >= operatorsAndArgs.size()) {
+            return null;
+        }
+        return operatorsAndArgs.get(index);
+    }
+
+    // given a stage number return the operator args for that stage
+    private List<String> getStageOperatorArgs(int stageIdx) {
+        int index = stageIdx * 2 + 1; // the index after the operator type has the args for that operator
+        if (index >= operatorsAndArgs.size()) {
+            return null;
+        }
+        String[] argsSplit = operatorsAndArgs.get(index).split(" ");
+        return new ArrayList<>(Arrays.asList(argsSplit));
     }
 
     private void restartFailedTask(int failedTaskId) {
@@ -246,18 +296,13 @@ public class RainStormLeader {
                 }
             }
         }
-        launchSingleWorkerTask(updated);
+
+        // get operator type and args for this task we are starting based on its stage and the initial operatorsAndArgs list
+        String operatorType = getStageOperator(updated.stageIdx);
+        List<String> operatorArgs = getStageOperatorArgs(updated.stageIdx);
+
+        launchSingleWorkerTask(updated, operatorType, operatorArgs); // launch the single worker task with the correct operator type and args on the new host
         LeaderLoggerHelper.taskRestart(updated.stageIdx, updated.globalTaskId, newHost);
-    }
-
-    private String chooseOperator(int stage) {
-        //TODO: Modify this method later
-        return "identity";
-    }
-
-    private List<String> operatorArgs(int stage) {
-        //TODO: Modify this method later
-        return List.of();
     }
 
     private void sendRoutingFileToTask(TaskInfo t) {
@@ -267,6 +312,7 @@ public class RainStormLeader {
         try (Socket socket = new Socket(t.host, WORKER_PORT);
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
             out.writeObject(req);
+            System.out.println("Sent routing file to task " + t.globalTaskId + " on host " + t.host);
             out.flush();
         } catch (Exception e) {
             System.out.println("Encountered an error while sending the routing file to the worker node " + t.globalTaskId);
@@ -299,8 +345,10 @@ public class RainStormLeader {
 
     private void processLoad() {
         for (int stage = 0; stage < numStages; stage++) {
-            //TODO: SKIP AUTO-SCALING DURING AGGREGATE?
-            if ("aggregate".equals(chooseOperator(stage))) continue;
+
+            // Skip auto-scaling for aggregate stages (stateful stage)
+            if ("aggregate".equalsIgnoreCase(getStageOperator(stage))) continue;
+
             long total = 0;
             int count = 0;
             for (TaskInfo t : tasks.values()) {
@@ -342,7 +390,12 @@ public class RainStormLeader {
                 }
             }
         }
-        launchSingleWorkerTask(ti);
+
+        // get operator type and args for this task we are starting based on its stage and the initial operatorsAndArgs list
+        String operatorType = getStageOperator(stage);
+        List<String> operatorArgs = getStageOperatorArgs(stage);
+
+        launchSingleWorkerTask(ti, operatorType, operatorArgs);
     }
 
     private void scaleDown(int stage) {

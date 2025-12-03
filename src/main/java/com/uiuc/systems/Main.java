@@ -384,7 +384,7 @@ public class Main {
             }
             else if (lowerLine.equals("list_tasks")) {
                 System.out.println("Listing RainStorm tasks...");
-                // TODO: Implement listing of RainStorm tasks (VM, PID, op_exe, log file)
+                // TODO: Implement listing of RainStorm tasks (VM, PID, global task id, op_exe, log file)
             }
             else if (lowerLine.startsWith("kill_task")) {
                 String[] parts = line.split("\\s+");
