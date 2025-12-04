@@ -26,7 +26,7 @@ public class RainStormLeader {
 
     private final String leaderHost;
 
-    private final List<String> vmHosts = Arrays.asList( "vm2", "vm3", "vm4", "vm5", "vm6", "vm7", "vm8", "vm9", "vm10");
+    private final List<String> vmHosts = Arrays.asList("fa25-cs425-7602.cs.illinois.edu", "fa25-cs425-7603.cs.illinois.edu", "fa25-cs425-7604.cs.illinois.edu", "fa25-cs425-7605.cs.illinois.edu", "fa25-cs425-7606.cs.illinois.edu", "fa25-cs425-7607.cs.illinois.edu", "fa25-cs425-7608.cs.illinois.edu", "fa25-cs425-7609.cs.illinois.edu", "fa25-cs425-7610.cs.illinois.edu");
 
     private final ConcurrentMap<Integer, Long> workerTaskLoad = new ConcurrentHashMap<>();
 
@@ -50,7 +50,7 @@ public class RainStormLeader {
 
     private final Map<Integer, TaskInfo> tasks = new HashMap<>();
 
-    private RainStormLeader(String leaderHost, int numStages, int numTasks, boolean exactlyOnce, boolean autoscaleEnabled, int inputRate, int lw, int hw,  List<String> operatorsAndArgs, String localInputFileName) {
+    public RainStormLeader(String leaderHost, int numStages, int numTasks, boolean exactlyOnce, boolean autoscaleEnabled, int inputRate, int lw, int hw,  List<String> operatorsAndArgs, String localInputFileName) {
         this.numStages = numStages;
         this.numTasks = numTasks;
         this.exactlyOnce = exactlyOnce;
@@ -227,7 +227,7 @@ public class RainStormLeader {
     }
 
     // given a stage number return the operator type for that stage
-    private String getStageOperator(int stageIdx) {
+    public String getStageOperator(int stageIdx) {
         int index = stageIdx * 2; // each stage has 2 entries: operator type and args
         if (index >= operatorsAndArgs.size()) {
             return null;
@@ -236,7 +236,7 @@ public class RainStormLeader {
     }
 
     // given a stage number return the operator args for that stage
-    private List<String> getStageOperatorArgs(int stageIdx) {
+    public List<String> getStageOperatorArgs(int stageIdx) {
         int index = stageIdx * 2 + 1; // the index after the operator type has the args for that operator
         if (index >= operatorsAndArgs.size()) {
             return null;
@@ -408,4 +408,13 @@ public class RainStormLeader {
         }
         LeaderLoggerHelper.taskScaleDown(stage, workerTaskIdToBeKilled, taskToBeKilled.host);
     }
+
+    /* Getter method to return an immutable copy of the tasks map */
+    public Map<Integer, TaskInfo> getTasks() {
+        return new HashMap<>(this.tasks);
+    }
+
+    /*
+     * Method to list all current tasks with their VM, PID, global task id, operator executed, and local log file name
+    */
 }

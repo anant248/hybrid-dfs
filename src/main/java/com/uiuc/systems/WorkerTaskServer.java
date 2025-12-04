@@ -89,6 +89,20 @@ public class WorkerTaskServer implements Runnable{
                 out.writeObject(new WorkerTaskKillAckRequest(taskId,killed));
                 out.flush();
             }
+
+            if (obj instanceof GetPidRequest) {
+                int taskId = ((GetPidRequest) obj).getTaskId();
+                long pid = -1L;
+                Process p = taskProcessMap.get(taskId);
+                if (p != null) {
+                    try {
+                        pid = p.pid();
+                    } catch (Throwable ignored) { pid = -1L; }
+                }
+                out.writeObject(new GetPidResponse(taskId, pid));
+                out.flush();
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
         }

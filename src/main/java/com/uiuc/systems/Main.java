@@ -2,7 +2,10 @@ package com.uiuc.systems;
 
 import java.util.*;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.math.BigInteger;
+import java.net.Socket;
 import java.nio.file.*;
 
 import com.uiuc.systems.NodeInfo.State;
@@ -10,6 +13,8 @@ import com.uiuc.systems.NodeInfo.State;
 public class Main {
     private static final int PORT = 6971;
     private static final long PROTOCOL_INTERVAL = 2000;
+    // keep a reference to the currently running RainStormLeader (if any)
+    private static RainStormLeader currentRainStormLeader = null;
 
     public static void main(String[] args) throws Exception {
         if (args.length < 4) {
@@ -93,6 +98,17 @@ public class Main {
             hyDFSServer.stopServer();
         }));
 
+        // start WorkerTaskServer if this node is not the introducer (rainstorm leader)
+        if (!id.equals(introducerId)) {
+            WorkerTaskServer workerTaskServer = new WorkerTaskServer();
+            new Thread(workerTaskServer).start();
+
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                System.out.println("JVM shutting down — stopping WorkerTaskServer...");
+                workerTaskServer.stopServer();
+            }));
+        }
+
         // build MembershipScheduler
         MemberShipScheduler msScheduler = new MemberShipScheduler();
 
@@ -131,6 +147,9 @@ public class Main {
         System.out.println("  getfromreplica VMaddress HyDFSfilename localfilename                 -> get the HyDFSfilename from a particular replica and store it locally as localfilename");
         System.out.println("  multiappend HyDFSfilename VMi ... VMj localfilenamei localfilenamej -> Launches appends from VMi,…VMj simultaneously to HyDFSfilename; VMi appends the contents of localfilenamei");
         System.out.println("  switch <protocol> <suspect/nosuspect>                                -> switch protocol and suspicion mode");
+        System.out.println("  rainstorm <Nstages> <Ntasks_per_stage> <op1_exe> <op1_args> … <opNstages_exe> <opNstages_args> <hydfs_src_directory> <hydfs_dest_filename> <exactly_once> <autoscale_enabled> <INPUT_RATE> <LW> <HW>  -> start a RainStorm job (only on introducer node)");
+        System.out.println("  list_tasks                -> list all current RainStorm tasks (only on introducer node)");
+        System.out.println("  kill_task <VM> <PID>      -> kill a specific RainStorm task (only on introducer node)");
 
         // listen for terminal input
         Scanner sc = new Scanner(System.in);
@@ -256,8 +275,6 @@ public class Main {
                 membershipList.addNodeEntry(joineeNode, joineeInfo);
                 membershipList.addNodeEntry(newIntroNode, newIntroInfo);
 
-                // TODO : likely wont work
-
                 // start the protocol that is currently running
                 protocolManager.startProtocol(() -> pingProtocol.sendPing(protocolManager.getSuspicionMode()));
                 
@@ -380,11 +397,69 @@ public class Main {
             }
             else if (lowerLine.startsWith("rainstorm")) {
                 System.out.println("RainStorm leader invocation received.");
-                // TODO: Initialize RainStorm leader logic here.
+
+                String[] parts = line.split("\\s+");
+                if (parts.length < 9) {
+                    System.out.println("Usage: RainStorm <Nstages> <Ntasks_per_stage> <op1_exe> <op1_args> … <opNstages_exe> <opNstages_args> <hydfs_src_directory> <hydfs_dest_filename> <exactly_once> <autoscale_enabled> <INPUT_RATE> <LW> <HW>");
+                    continue;
+                }
+
+                try {
+                    int idx = 1;
+                    int Nstages = Integer.parseInt(parts[idx++]);
+                    int NtasksPerStage = Integer.parseInt(parts[idx++]);
+
+                    List<String> operatorsAndArgs = new ArrayList<>();
+                    for (int s = 0; s < Nstages; s++) {
+                        if (idx + 1 >= parts.length) {
+                            System.out.println("Error: insufficient operator/args entries.");
+                            continue;
+                        }
+                        operatorsAndArgs.add(parts[idx++]); 
+                        operatorsAndArgs.add(parts[idx++]); 
+                    }
+
+                    String hydfsSrc = parts[idx++];
+                    String hydfsDest = parts[idx++];
+                    boolean exactlyOnce = Boolean.parseBoolean(parts[idx++]);
+                    boolean autoscale = Boolean.parseBoolean(parts[idx++]);
+                    int inputRate = Integer.parseInt(parts[idx++]);
+                    int lw = Integer.parseInt(parts[idx++]);
+                    int hw = Integer.parseInt(parts[idx++]);
+
+                    RainStormLeader rainStormLeader = new RainStormLeader(
+                        selfNode.getIp(),
+                        Nstages,
+                        NtasksPerStage,
+                        exactlyOnce,
+                        autoscale,
+                        inputRate,
+                        lw,
+                        hw,
+                        operatorsAndArgs,
+                        hydfsSrc
+                    );
+
+                    // keep global reference so Main can query it later
+                    currentRainStormLeader = rainStormLeader;
+
+                    new Thread(() -> {
+                        try {
+                            rainStormLeader.run();
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }).start();
+
+                } catch (Exception e) {
+                    System.out.println("Error parsing RainStorm arguments: " + e.getMessage());
+                }
             }
             else if (lowerLine.equals("list_tasks")) {
                 System.out.println("Listing RainStorm tasks...");
-                // TODO: Implement listing of RainStorm tasks (VM, PID, global task id, op_exe, log file)
+
+                printRainStormTasks();
+
             }
             else if (lowerLine.startsWith("kill_task")) {
                 String[] parts = line.split("\\s+");
@@ -420,31 +495,61 @@ public class Main {
             }
         }
     }
+
+    // helper method to print out all current tasks across all stages
+    private static void printRainStormTasks() {
+
+        // in case currentRainStormLeader is null
+        if (currentRainStormLeader == null) {
+            System.out.println("No running RainStorm leader found. Start one with the 'rainstorm' command first.");
+            return;
+        }
+
+        // retrieve tasks map from currentRainStormLeader
+        Map<Integer, RainStormLeader.TaskInfo> tasks = currentRainStormLeader.getTasks();
+        if (tasks.isEmpty()) {
+            System.out.println("No tasks registered in leader.");
+            return;
+        }
+
+        // header
+        System.out.printf("%-8s | %-12s | %-8s | %-6s | %-15s | %-20s%n",
+                "TASKID", "VM", "PID", "STAGE", "OPERATOR", "LOGFILE");
+        System.out.println("---------------------------------------------------------------------------------------");
+
+        for (Map.Entry<Integer, RainStormLeader.TaskInfo> e : tasks.entrySet()) {
+            RainStormLeader.TaskInfo ti = e.getValue();
+            int taskId = ti.globalTaskId;
+            String host = ti.host;
+            int stageIdx = ti.stageIdx;
+            String opExe = currentRainStormLeader.getStageOperator(stageIdx);
+            String logFile = "/append_log/rainstorm_task_" + taskId + ".log";
+
+            long pid = -1L;
+            // RPC to worker's WorkerTaskServer to request PID for taskId
+            try (Socket s = new Socket(host, RainStormLeader.WORKER_PORT);
+                    ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream());
+                    ObjectInputStream in = new ObjectInputStream(s.getInputStream())) {
+
+                out.flush(); // match WorkerTaskServer's pattern
+                GetPidRequest req = new GetPidRequest(taskId);
+                out.writeObject(req);
+                out.flush();
+
+                Object resp = in.readObject();
+                if (resp instanceof GetPidResponse) {
+                    pid = ((GetPidResponse) resp).getPid();
+                } else {
+                    pid = -1L;
+                }
+            } catch (Exception ex) {
+                // couldn't contact worker or other error, leave pid as -1
+                pid = -1L;
+            }
+
+            String pidStr = (pid == -1L) ? "N/A" : Long.toString(pid);
+            System.out.printf("%-8d | %-12s | %-8s | %-6d | %-15s | %-20s%n",
+                    taskId, host, pidStr, stageIdx, (opExe == null ? "?" : opExe), logFile);
+        }
+    }
 }
-
-
-// Helper code that may be useful elsewhere
-
-// worker process starting operator execution
-
-/*
-if operator == "transform":
-    exec = "operator_transform.py"
-elif operator == "filter":
-    exec = "operator_filter.py"
-elif operator == "aggregate":
-    exec = "operator_aggregate.py"
-
-ProcessBuilder pb = new ProcessBuilder("python3", exec, pattern);
-Process proc = pb.start();
-
-BufferedWriter opInput = new BufferedWriter(new OutputStreamWriter(proc.getOutputStream()));
-BufferedReader opOutput = new BufferedReader(new InputStreamReader(proc.getInputStream()));
-*/
-
-// data flow inside a task
-// receive tuple →
-// write to operator.stdin →
-// operator transforms tuple →
-// operator.stdout →
-// task forwards output

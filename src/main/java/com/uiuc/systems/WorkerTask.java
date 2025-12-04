@@ -34,7 +34,7 @@ public class WorkerTask {
     private static final ObjectMapper mapper = new ObjectMapper();
 
     HyDFS hdfs = GlobalHyDFS.hdfs;
-    private static final List<String> ips = Arrays.asList("vm2","vm3","vm4","vm5","vm6","vm7","vm8","vm9","vm10");
+    private static final List<String> ips = Arrays.asList("fa25-cs425-7602.cs.illinois.edu", "fa25-cs425-7603.cs.illinois.edu", "fa25-cs425-7604.cs.illinois.edu", "fa25-cs425-7605.cs.illinois.edu", "fa25-cs425-7606.cs.illinois.edu", "fa25-cs425-7607.cs.illinois.edu", "fa25-cs425-7608.cs.illinois.edu", "fa25-cs425-7609.cs.illinois.edu", "fa25-cs425-7610.cs.illinois.edu");
     private static final String OUTPUT_FILE = "stream_out.txt";
 
     private final AtomicLong tuplesCount = new AtomicLong(0);
