@@ -48,6 +48,10 @@ public class Main {
         // build HyDFS instance
         HyDFS hydfs = new HyDFS(selfNode, ring);
 
+        // set global HyDFS instance
+        GlobalHyDFS globalHyDFS = new GlobalHyDFS();
+        globalHyDFS.setHdfs(hydfs);
+
         // build membership list instance
         MemberShipList membershipList = new MemberShipList(ring, hydfs);
 
@@ -100,6 +104,8 @@ public class Main {
 
         // start WorkerTaskServer if this node is not the introducer (rainstorm leader)
         if (!id.equals(introducerId)) {
+            System.out.println("Starting WorkerTaskServer on non-introducer node...");
+
             WorkerTaskServer workerTaskServer = new WorkerTaskServer();
             new Thread(workerTaskServer).start();
 

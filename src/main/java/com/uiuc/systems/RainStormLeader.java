@@ -33,7 +33,7 @@ public class RainStormLeader {
 
     private final AtomicLong nextGlobalTupleId = new AtomicLong(0);
 
-    HyDFS hdfs = GlobalHyDFS.hdfs;
+    HyDFS hdfs = GlobalHyDFS.getHdfs();
 
     static class TaskInfo {
         final int globalTaskId;

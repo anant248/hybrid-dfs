@@ -3,15 +3,13 @@ package com.uiuc.systems;
 public class GlobalHyDFS {
     public static HyDFS hdfs;
 
-    public GlobalHyDFS(HyDFS hdfs) {
-        // this.hdfs = hdfs;
-    }
+    public GlobalHyDFS() { }
 
-    public HyDFS getHdfs() {
+    public static HyDFS getHdfs() {
         return hdfs;
     }
 
-    // public void setHdfs(HyDFS hdfs) {
-    //     this.hdfs = hdfs;
-    // }
+    public void setHdfs(HyDFS hdfs) {
+        GlobalHyDFS.hdfs = hdfs;
+    }
 }
