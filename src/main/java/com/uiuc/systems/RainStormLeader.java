@@ -81,7 +81,7 @@ public class RainStormLeader {
             rm.setDaemon(true);
             rm.start();
         }
-        Thread.sleep(2000);
+        Thread.sleep(5000);
         new Thread(() -> runSourceProcess(localInputFileName)).start();
 
         LeaderLoggerHelper.runEnd();
@@ -268,6 +268,8 @@ public class RainStormLeader {
         String newHost = getNewIp(old.host);
         TaskInfo updated = new TaskInfo(old.globalTaskId, old.stageIdx, old.idxWithinStage, newHost);
         tasks.put(failedTaskId, updated);
+
+        System.out.println("Restarting failed task " + failedTaskId + " on new host " + newHost);
         sendRoutingFileToTask(updated);
 
         if (updated.stageIdx > 0) {

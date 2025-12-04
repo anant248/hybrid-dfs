@@ -520,7 +520,7 @@ public class Main {
         }
 
         // header
-        System.out.printf("%-8s | %-12s | %-8s | %-6s | %-15s | %-20s%n",
+        System.out.printf("%-8s | %-25s | %-8s | %-6s | %-15s | %-20s%n",
                 "TASKID", "VM", "PID", "STAGE", "OPERATOR", "LOGFILE");
         System.out.println("---------------------------------------------------------------------------------------");
 

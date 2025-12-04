@@ -30,7 +30,7 @@ public class HyDFSServer implements Runnable{
         try {
             sc = new ServerSocket(port);
             sc.setReuseAddress(true);
-            System.out.println("Server listening on port " + port);
+            System.out.println("HyDFS Server listening on port " + port);
 
             while (running) {
                 Socket socket = sc.accept();

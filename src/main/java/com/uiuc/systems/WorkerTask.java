@@ -114,17 +114,23 @@ public class WorkerTask {
     }
 
     public void runTask() throws Exception {
-        launchOperator();
-
-        System.out.println("WorkerTask " + taskId + " started operator " + operator);
-
-        // Start stdout reader thread
-        new Thread(this::stdoutReaderLoop).start();
-
         // Start input listener (TCP)
         startAckServer();
         startInputServer();
         startRetryThread();
+
+        // launch operator subprocess after servers are up
+        launchOperator();
+
+        System.out.println("WorkerTask " + taskId + " started operator " + operator);
+        logger.info("Task {} launched operator {}", taskId, operator);
+
+        // Start stdout reader thread
+        new Thread(this::stdoutReaderLoop).start();
+
+        System.out.println("Task " + taskId + ": started stdout reader thread");
+        logger.info("Task {} started stdout reader thread", taskId);
+
         sendLoadStatusToLeader();
     }
 
@@ -207,7 +213,8 @@ public class WorkerTask {
     private void startInputServer() throws Exception {
         int listenPort = 9000 + taskId; // deterministic mapping
         try (ServerSocket server = new ServerSocket(listenPort)) {
-            System.out.println("Task " + taskId + " listening on port " + listenPort);
+            System.out.println("Starting input server for task " + taskId + " listening on port " + listenPort);
+            logger.info("Task {} input server started on port {}", taskId, listenPort);
 
             while (true) {
                 Socket client = server.accept();
@@ -234,6 +241,9 @@ public class WorkerTask {
         });
         retryThread.setDaemon(true);
         retryThread.start();
+
+        System.out.println("Task " + taskId + ": started retry thread");
+        logger.info("Task {} started retry thread", taskId);
     }
 
     private void retrySend(PendingTuple p) {
@@ -401,6 +411,9 @@ public class WorkerTask {
         });
         reporter.setDaemon(true);
         reporter.start();
+
+        System.out.println("Task " + taskId + ": started load reporter thread");
+        logger.info("Task {} started load reporter thread", taskId);
     }
 
     private void sendLoadStatus(WorkerTaskLoad rep) {
