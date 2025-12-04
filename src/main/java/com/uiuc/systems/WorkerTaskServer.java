@@ -1,6 +1,8 @@
 package com.uiuc.systems;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
@@ -71,6 +73,27 @@ public class WorkerTaskServer implements Runnable{
                 System.out.println("Starting WorkerTask with command: " + String.join(" ", cmd));
 
                 Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+ 
+                new Thread(() -> {
+
+                    try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+
+                        String line;
+
+                        while ((line = br.readLine()) != null) {
+
+                            System.out.println("[WorkerTask OUTPUT] " + line);
+
+                        }
+
+                    } catch (Exception e) {
+
+                        e.printStackTrace();
+
+                    }
+
+                }).start();
+
 
                 System.out.println("process started with PID=" + p.pid());
 
