@@ -91,6 +91,8 @@ public class WorkerTask {
             return;
         }
 
+        System.out.println("Starting WorkerTask with args: " + String.join(" ", args) + "and worker task args count: " + (args.length));
+
         String leaderIp = args[0];
         int leaderPort = Integer.parseInt(args[1]);
         int taskId = Integer.parseInt(args[2]);
@@ -463,6 +465,8 @@ class RoutingLoader {
             System.err.println("RoutingLoader: cannot load " + filename);
             e.printStackTrace();
         }
+
+        System.out.println("RoutingLoader: task " + taskId + " downstream targets size of: " + targets.size());
         return targets;
     }
 }

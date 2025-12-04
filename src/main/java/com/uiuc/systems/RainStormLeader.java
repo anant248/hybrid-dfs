@@ -84,8 +84,8 @@ public class RainStormLeader {
         Thread.sleep(5000);
         new Thread(() -> runSourceProcess(localInputFileName)).start();
 
-        LeaderLoggerHelper.runEnd();
-        System.out.println("RainStorm Leader finished execution.");
+        // LeaderLoggerHelper.runEnd();
+        // System.out.println("RainStorm Leader finished execution.");
     }
     private void initializeTasks() {
         int id = 0;
