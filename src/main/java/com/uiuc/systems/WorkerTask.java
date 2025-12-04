@@ -23,6 +23,7 @@ public class WorkerTask {
     private final List<String> operatorArgs;
     private final List<DownstreamTarget> downstream = new ArrayList<>();
     private final boolean isFinal;
+    private final String OUTPUT_FILE;
 
     private Process operatorProc;
     private BufferedWriter opStdin;
@@ -35,7 +36,6 @@ public class WorkerTask {
 
     HyDFS hdfs = GlobalHyDFS.hdfs;
     private static final List<String> ips = Arrays.asList("fa25-cs425-7602.cs.illinois.edu", "fa25-cs425-7603.cs.illinois.edu", "fa25-cs425-7604.cs.illinois.edu", "fa25-cs425-7605.cs.illinois.edu", "fa25-cs425-7606.cs.illinois.edu", "fa25-cs425-7607.cs.illinois.edu", "fa25-cs425-7608.cs.illinois.edu", "fa25-cs425-7609.cs.illinois.edu", "fa25-cs425-7610.cs.illinois.edu");
-    private static final String OUTPUT_FILE = "stream_out.txt";
 
     private final AtomicLong tuplesCount = new AtomicLong(0);
 
@@ -60,7 +60,7 @@ public class WorkerTask {
 
     private static final int MAX_RETRIES = 3;
 
-    public WorkerTask(String leaderIp, int leaderPort, int taskId, String operator, boolean isFinal, List<String> operatorArgs, List<DownstreamTarget> downstream,int stageIdx) {
+    public WorkerTask(String leaderIp, int leaderPort, int taskId, String operator, boolean isFinal, List<String> operatorArgs, List<DownstreamTarget> downstream,int stageIdx, String outputFile) {
         this.leaderIp = leaderIp;
         this.leaderPort = leaderPort;
         this.taskId = taskId;
@@ -69,6 +69,7 @@ public class WorkerTask {
         this.operatorArgs = operatorArgs;
         this.downstream.addAll(downstream);
         this.stageIdx = stageIdx;
+        this.OUTPUT_FILE = outputFile;
         this.taskLogPath = "/append_log/rainstorm_task_" + taskId + ".log";
         boolean logFileExists = rebuildStateFromLog();
 
@@ -77,6 +78,7 @@ public class WorkerTask {
         if (!logFileExists) {
             try {
                 hdfs.sendCreateRequestToOwner("starting_log.log", taskLogPath);
+                System.out.println("Task " + taskId + ": created new HyDFS log file " + taskLogPath);
             } catch (Exception e) {
                 logger.error("Task {}: failed to create HyDFS log file {}", taskId, taskLogPath, e);
             }
@@ -85,7 +87,7 @@ public class WorkerTask {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 3) {
-            System.err.println("Usage: WorkerTask <leader IP> <leader port> <taskId> <stageIdx> <operatorType> <isFinal> [operatorArgs...]");
+            System.err.println("Usage: WorkerTask <leader IP> <leader port> <taskId> <stageIdx> <operatorType> <isFinal> <outputFileName> [operatorArgs...]");
             return;
         }
 
@@ -96,17 +98,18 @@ public class WorkerTask {
         String operatorType = args[4];
         int isFinalFlag = Integer.parseInt(args[5]);
         boolean isFinal = (isFinalFlag == 1);
+        String outputFile = args[6];
 
         // All args after operator type are operator arguments
         List<String> operatorArgs = new ArrayList<>();
-        for (int i = 6; i < args.length; i++) {
+        for (int i = 7; i < args.length; i++) {
             operatorArgs.add(args[i]);
         }
 
         // Load downstream info—this would come from a config or leader message
         List<DownstreamTarget> downstream = RoutingLoader.load(taskId);
 
-        WorkerTask worker = new WorkerTask(leaderIp, leaderPort, taskId, operatorType, isFinal, operatorArgs, downstream, stageIdx);
+        WorkerTask worker = new WorkerTask(leaderIp, leaderPort, taskId, operatorType, isFinal, operatorArgs, downstream, stageIdx, outputFile);
         worker.runTask();
     }
 
@@ -359,6 +362,7 @@ public class WorkerTask {
         int ackPort = 10000 + taskId;
         new Thread(() -> {
             try (ServerSocket server = new ServerSocket(ackPort)) {
+                System.out.println("Task " + taskId + " ACK server listening on port " + ackPort);
                 logger.info("Task {} ACK server started on port {}", taskId, ackPort);
 
                 while (true) {

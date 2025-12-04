@@ -10,12 +10,13 @@ public class StartWorkerTaskRequest implements Serializable {
     private String operator;
     private boolean isFinal;
     private List<String> operatorArgs;
+    private String outputFileName;
 
     private String leaderIp;
 
     private int leaderPort;
 
-    public StartWorkerTaskRequest(String leaderIp, int leaderPort, int taskId, int stageIdx, String operator, boolean isFinal, List<String> operatorArgs) {
+    public StartWorkerTaskRequest(String leaderIp, int leaderPort, int taskId, int stageIdx, String operator, boolean isFinal, List<String> operatorArgs, String outputFileName) {
         this.leaderIp = leaderIp;
         this.leaderPort = leaderPort;
         this.taskId = taskId;
@@ -23,6 +24,7 @@ public class StartWorkerTaskRequest implements Serializable {
         this.operator = operator;
         this.isFinal = isFinal;
         this.operatorArgs = operatorArgs;
+        this.outputFileName = outputFileName;
     }
 
     public int getStageIdx() {
@@ -65,6 +67,10 @@ public class StartWorkerTaskRequest implements Serializable {
         this.operator = operator;
     }
 
+    public String getOutputFileName() {
+        return outputFileName;
+    }
+
     public boolean isFinal() {
         return isFinal;
     }
@@ -79,5 +85,9 @@ public class StartWorkerTaskRequest implements Serializable {
 
     public void setOperatorArgs(List<String> operatorArgs) {
         this.operatorArgs = operatorArgs;
+    }
+
+    public void setOutputFileName(String outputFileName) {
+        this.outputFileName = outputFileName;
     }
 }

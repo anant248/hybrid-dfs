@@ -239,6 +239,47 @@ public class HyDFS {
         }
     }
 
+    /**
+     * Creates an empty file in HyDFS by sending a CREATE request to the owner,
+     * but without uploading any initial content.
+     *
+     * @param hdfsFileName the HyDFS filename to create
+     * @return true if file creation succeeded, false otherwise
+     */
+    public boolean sendCreateEmptyFileToOwner(String hdfsFileName) {
+        try {
+            // Determine the owner node for this filename
+            List<NodeId> hdfsFileReplicas = ring.getReplicas(hdfsFileName);
+
+            // if no replicas, return false
+            if(hdfsFileReplicas.size() == 0){
+                return false;
+            }
+            NodeId owner = hdfsFileReplicas.get(0);
+            String ownerIp = owner.getIp();
+
+            // Open socket to owner
+            try (Socket socket = new Socket(ownerIp, PORT);
+                ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+                ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
+
+                out.flush();  // important
+                CreateRequest ownerCreateRequest = new CreateRequest(new byte[0], hdfsFileName);
+
+                out.writeObject(ownerCreateRequest);
+                out.flush();
+
+                // Wait for response
+                String response = (String) in.readObject();
+                return response.equals("ACK");
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     public void sendResponseToClient(Socket client, String message,ObjectOutputStream out){
         try{
             out.writeObject(message);

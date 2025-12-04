@@ -65,6 +65,7 @@ public class WorkerTaskServer implements Runnable{
                 cmd.add(Integer.toString(((StartWorkerTaskRequest) obj).getStageIdx()));
                 cmd.add(((StartWorkerTaskRequest) obj).getOperator());
                 cmd.add(((StartWorkerTaskRequest) obj).isFinal() ? "1" : "0");
+                cmd.add(((StartWorkerTaskRequest) obj).getOutputFileName());
                 cmd.addAll(((StartWorkerTaskRequest) obj).getOperatorArgs());
 
                 Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();

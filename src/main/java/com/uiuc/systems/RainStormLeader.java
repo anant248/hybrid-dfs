@@ -22,6 +22,7 @@ public class RainStormLeader {
     private final int lw;
     private final int hw;
     private final String localInputFileName;
+    private final String hydfsDestFileName;
     private final List<String> operatorsAndArgs;
 
     private final String leaderHost;
@@ -50,7 +51,7 @@ public class RainStormLeader {
 
     private final Map<Integer, TaskInfo> tasks = new HashMap<>();
 
-    public RainStormLeader(String leaderHost, int numStages, int numTasks, boolean exactlyOnce, boolean autoscaleEnabled, int inputRate, int lw, int hw,  List<String> operatorsAndArgs, String localInputFileName) {
+    public RainStormLeader(String leaderHost, int numStages, int numTasks, boolean exactlyOnce, boolean autoscaleEnabled, int inputRate, int lw, int hw,  List<String> operatorsAndArgs, String localInputFileName, String hydfsDestFileName) {
         this.numStages = numStages;
         this.numTasks = numTasks;
         this.exactlyOnce = exactlyOnce;
@@ -61,21 +62,30 @@ public class RainStormLeader {
         this.leaderHost = leaderHost;
         this.operatorsAndArgs = operatorsAndArgs;
         this.localInputFileName = localInputFileName;
+        this.hydfsDestFileName = hydfsDestFileName;
     }
 
     public void run() throws Exception {
+        LeaderLoggerHelper.runStart();
+        System.out.println("RainStorm Leader starting on host " + leaderHost);
+
+        // create the destination file in HyDFS
+        hdfs.sendCreateEmptyFileToOwner(hydfsDestFileName);
+
         new Thread(new LeaderServer(this, LEADER_PORT)).start();
         initializeTasks();
         distributeRoutingFiles();
         launchAllWorkerTasks();
-        if(autoscaleEnabled){
+        if(autoscaleEnabled && !exactlyOnce){
             Thread rm = new Thread(this::adjustLoad);
             rm.setDaemon(true);
             rm.start();
         }
         Thread.sleep(2000);
         new Thread(() -> runSourceProcess(localInputFileName)).start();
-        LeaderLoggerHelper.runEnd("OK");
+
+        LeaderLoggerHelper.runEnd();
+        System.out.println("RainStorm Leader finished execution.");
     }
     private void initializeTasks() {
         int id = 0;
@@ -122,6 +132,7 @@ public class RainStormLeader {
                 }
             }
 
+            System.out.println("SourceProcess: started streaming input to " + stage0Tasks + " Stage 0 tasks.");
             int lineNum = 0;
             ObjectMapper mapper = new ObjectMapper();
             long sleepMicros = (long)(1_000_000.0 / inputRate); // enforce input rate
@@ -206,7 +217,9 @@ public class RainStormLeader {
 
     private void launchSingleWorkerTask(TaskInfo t, String operatorType, List<String> operatorArgs) {
         boolean isFinal = (t.stageIdx == numStages - 1);
-        StartWorkerTaskRequest req = new StartWorkerTaskRequest(leaderHost, LEADER_PORT, t.globalTaskId, t.stageIdx, operatorType, isFinal, operatorArgs);
+        StartWorkerTaskRequest req = new StartWorkerTaskRequest(leaderHost, LEADER_PORT, t.globalTaskId, t.stageIdx, operatorType, isFinal, operatorArgs, hydfsDestFileName);
+
+        System.out.println("Launching WorkerTask " + t.globalTaskId + " on host " + t.host + " for stage " + t.stageIdx + " with operator " + operatorType);
 
         try (Socket socket = new Socket(t.host, WORKER_PORT);
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {

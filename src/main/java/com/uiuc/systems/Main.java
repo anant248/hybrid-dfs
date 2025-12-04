@@ -437,7 +437,8 @@ public class Main {
                         lw,
                         hw,
                         operatorsAndArgs,
-                        hydfsSrc
+                        hydfsSrc,
+                        hydfsDest
                     );
 
                     // keep global reference so Main can query it later

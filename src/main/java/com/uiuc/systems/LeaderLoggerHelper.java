@@ -5,12 +5,12 @@ import org.slf4j.LoggerFactory;
 public class LeaderLoggerHelper {
     private static final Logger log = LoggerFactory.getLogger("RainstormLeader");
 
-    public static void runStart(String cmd) {
-        log.info("EVENT=RUN_START cmd=\"{}\"", cmd);
+    public static void runStart() {
+        log.info("EVENT=RUN_START");
     }
 
-    public static void runEnd(String status) {
-        log.info("EVENT=RUN_END status={}", status);
+    public static void runEnd() {
+        log.info("EVENT=RUN_END");
     }
 
     public static void config(int stages, int tPerStage, boolean eo, boolean auto, int rate, int lw, int hw) {
