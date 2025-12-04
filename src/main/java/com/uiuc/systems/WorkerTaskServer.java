@@ -56,7 +56,7 @@ public class WorkerTaskServer implements Runnable{
                 List<String> cmd = new ArrayList<>();
                 cmd.add("java");
                 cmd.add("-cp");
-                cmd.add("HybridDistributedFileSystem.jar");
+                cmd.add("target/HybridDistributedFileSystem-1.0-SNAPSHOT.jar");
                 cmd.add("com.uiuc.systems.WorkerTask");
                 cmd.add(((StartWorkerTaskRequest) obj).getLeaderIp());
                 Integer port = ((StartWorkerTaskRequest) obj).getLeaderPort();
