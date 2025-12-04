@@ -75,21 +75,13 @@ public class WorkerTaskServer implements Runnable{
                 Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
  
                 new Thread(() -> {
-
                     try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
-
                         String line;
-
                         while ((line = br.readLine()) != null) {
-
                             System.out.println("[WorkerTask OUTPUT] " + line);
-
                         }
-
                     } catch (Exception e) {
-
                         e.printStackTrace();
-
                     }
 
                 }).start();

@@ -7,6 +7,7 @@ if len(sys.argv) < 1:
     sys.exit(1)
 
 IDENTITY = True
+print("Operator Identity started.")
 
 for line in sys.stdin:
     try:

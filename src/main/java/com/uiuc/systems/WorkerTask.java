@@ -153,9 +153,22 @@ public class WorkerTask {
         cmd.addAll(operatorArgs);
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+        pb.redirectErrorStream(true);
 
         operatorProc = pb.start();
+
+        // combine python process output
+        new Thread(() -> {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    System.out.println("[OperatorTask OUTPUT] " + line);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
+
         opStdin = new BufferedWriter(new OutputStreamWriter(operatorProc.getOutputStream()));
         opStdout = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()));
     }
@@ -214,15 +227,20 @@ public class WorkerTask {
 
     private void startInputServer() throws Exception {
         int listenPort = 9000 + taskId; // deterministic mapping
-        try (ServerSocket server = new ServerSocket(listenPort)) {
-            System.out.println("Starting input server for task " + taskId + " listening on port " + listenPort);
-            logger.info("Task {} input server started on port {}", taskId, listenPort);
 
-            while (true) {
-                Socket client = server.accept();
-                new Thread(() -> handleClient(client)).start();
+        new Thread(() -> {
+            try (ServerSocket server = new ServerSocket(listenPort)) {
+                System.out.println("Starting input server for task " + taskId + " listening on port " + listenPort);
+                logger.info("Task {} input server started on port {}", taskId, listenPort);
+
+                while (true) {
+                    Socket client = server.accept();
+                    new Thread(() -> handleClient(client)).start();
+                }
+            } catch (Exception e) {
+                logger.error("Task {} input server crashed", taskId, e);
             }
-        }
+        }).start();
     }
 
     private void startRetryThread() {
