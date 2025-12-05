@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 public class WorkerTaskServer implements Runnable{
     private static final int PORT = 7979;
     private volatile boolean running = true;
@@ -49,7 +51,7 @@ public class WorkerTaskServer implements Runnable{
             out.flush();
             Object obj = in.readObject();
             if (obj instanceof WorkerTaskRoutingFileRequest) {
-                String path = "/tmp/routing_" + ((WorkerTaskRoutingFileRequest) obj).getTaskId() + ".conf";
+                String path = "routing/routing_" + ((WorkerTaskRoutingFileRequest) obj).getTaskId() + ".conf";
                 Files.writeString(Paths.get(path), ((WorkerTaskRoutingFileRequest) obj).getFileContent());
                 System.out.println("Routing file created at: " + path);
             }
@@ -68,6 +70,14 @@ public class WorkerTaskServer implements Runnable{
                 cmd.add(((StartWorkerTaskRequest) obj).getOperator());
                 cmd.add(((StartWorkerTaskRequest) obj).isFinal() ? "1" : "0");
                 cmd.add(((StartWorkerTaskRequest) obj).getOutputFileName());
+
+                // serialize ring object to JSON string
+                Ring ring = ((StartWorkerTaskRequest) obj).getRing();
+                ObjectMapper mapper = new ObjectMapper();
+                String ringJson = mapper.writeValueAsString(ring);
+
+                cmd.add(ringJson);
+                cmd.add(((StartWorkerTaskRequest) obj).getWorkerHost());
                 cmd.addAll(((StartWorkerTaskRequest) obj).getOperatorArgs());
 
                 System.out.println("Starting WorkerTask with command: " + String.join(" ", cmd));

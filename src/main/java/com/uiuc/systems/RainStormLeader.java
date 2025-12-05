@@ -24,6 +24,7 @@ public class RainStormLeader {
     private final String localInputFileName;
     private final String hydfsDestFileName;
     private final List<String> operatorsAndArgs;
+    private Ring ring;
 
     private final String leaderHost;
 
@@ -53,7 +54,7 @@ public class RainStormLeader {
 
     private final Map<Integer, TaskInfo> tasks = new HashMap<>();
 
-    public RainStormLeader(String leaderHost, int numStages, int numTasks, boolean exactlyOnce, boolean autoscaleEnabled, int inputRate, int lw, int hw,  List<String> operatorsAndArgs, String localInputFileName, String hydfsDestFileName) {
+    public RainStormLeader(String leaderHost, int numStages, int numTasks, boolean exactlyOnce, boolean autoscaleEnabled, int inputRate, int lw, int hw,  List<String> operatorsAndArgs, String localInputFileName, String hydfsDestFileName, Ring ring) {
         this.numStages = numStages;
         this.numTasks = numTasks;
         this.exactlyOnce = exactlyOnce;
@@ -65,6 +66,7 @@ public class RainStormLeader {
         this.operatorsAndArgs = operatorsAndArgs;
         this.localInputFileName = localInputFileName;
         this.hydfsDestFileName = hydfsDestFileName;
+        this.ring = ring;
     }
 
     public void run() throws Exception {
@@ -225,7 +227,7 @@ public class RainStormLeader {
 
     private void launchSingleWorkerTask(TaskInfo t, String operatorType, List<String> operatorArgs) {
         boolean isFinal = (t.stageIdx == numStages - 1);
-        StartWorkerTaskRequest req = new StartWorkerTaskRequest(leaderHost, LEADER_PORT, t.globalTaskId, t.stageIdx, operatorType, isFinal, operatorArgs, hydfsDestFileName);
+        StartWorkerTaskRequest req = new StartWorkerTaskRequest(leaderHost, LEADER_PORT, t.globalTaskId, t.stageIdx, operatorType, isFinal, operatorArgs, hydfsDestFileName, ring, t.host);
 
         System.out.println("Launching WorkerTask " + t.globalTaskId + " on host " + t.host + " for stage " + t.stageIdx + " with operator " + operatorType);
 

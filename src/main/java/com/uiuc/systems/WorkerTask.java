@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class WorkerTask {
     private final String leaderIp;
-
+    private static final int WORKER_TASK_PORT = 6971;
     private final int leaderPort;
     private final int taskId;
     private final String operator;
@@ -34,7 +34,7 @@ public class WorkerTask {
 
     private static final ObjectMapper mapper = new ObjectMapper();
 
-    HyDFS hdfs = GlobalHyDFS.getHdfs();
+    private HyDFS hdfs;
     private static final List<String> ips = Arrays.asList("fa25-cs425-7602.cs.illinois.edu", "fa25-cs425-7603.cs.illinois.edu", "fa25-cs425-7604.cs.illinois.edu", "fa25-cs425-7605.cs.illinois.edu", "fa25-cs425-7606.cs.illinois.edu", "fa25-cs425-7607.cs.illinois.edu", "fa25-cs425-7608.cs.illinois.edu", "fa25-cs425-7609.cs.illinois.edu", "fa25-cs425-7610.cs.illinois.edu");
 
     private final AtomicLong tuplesCount = new AtomicLong(0);
@@ -60,7 +60,7 @@ public class WorkerTask {
 
     private static final int MAX_RETRIES = 3;
 
-    public WorkerTask(String leaderIp, int leaderPort, int taskId, String operator, boolean isFinal, List<String> operatorArgs, List<DownstreamTarget> downstream,int stageIdx, String outputFile) {
+    public WorkerTask(String leaderIp, int leaderPort, int taskId, String operator, boolean isFinal, List<String> operatorArgs, List<DownstreamTarget> downstream,int stageIdx, String outputFile, Ring ring, String currentIp) {
         this.leaderIp = leaderIp;
         this.leaderPort = leaderPort;
         this.taskId = taskId;
@@ -70,12 +70,15 @@ public class WorkerTask {
         this.downstream.addAll(downstream);
         this.stageIdx = stageIdx;
         this.OUTPUT_FILE = outputFile;
-        this.taskLogPath = "/append_log/rainstorm_task_" + taskId + ".log";
-        boolean logFileExists = rebuildStateFromLog();
+        this.taskLogPath = "rainstorm_task_" + taskId + ".log";
+
+        // build out HyDFS for this worker task
+        NodeId currentNode = new NodeId(currentIp, WORKER_TASK_PORT, System.currentTimeMillis());
+        this.hdfs = new HyDFS(currentNode, ring);
 
         // if rebuildState was false, create an empty log file in HyDFS, otherwise the appends will fail
         // if rebuildState was true, the log file already exists
-        if (!logFileExists) {
+        if (!rebuildStateFromLog()) {
             try {
                 hdfs.sendCreateEmptyFileToOwner(taskLogPath);
                 System.out.println("Task " + taskId + ": created new HyDFS log file " + taskLogPath);
@@ -87,7 +90,7 @@ public class WorkerTask {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 3) {
-            System.err.println("Usage: WorkerTask <leader IP> <leader port> <taskId> <stageIdx> <operatorType> <isFinal> <outputFileName> [operatorArgs...]");
+            System.err.println("Usage: WorkerTask <leader IP> <leader port> <taskId> <stageIdx> <operatorType> <isFinal> <outputFileName> <serialized ring object> <workerHost IP> [operatorArgs...]");
             return;
         }
 
@@ -101,17 +104,24 @@ public class WorkerTask {
         int isFinalFlag = Integer.parseInt(args[5]);
         boolean isFinal = (isFinalFlag == 1);
         String outputFile = args[6];
+        String ringJson = args[7];
+        String workerHost = args[8];
 
         // All args after operator type are operator arguments
         List<String> operatorArgs = new ArrayList<>();
-        for (int i = 7; i < args.length; i++) {
+        for (int i = 9; i < args.length; i++) {
             operatorArgs.add(args[i]);
         }
+
+        System.out.println("Worker Task Main Args Parsed: leaderIp=" + leaderIp + ", leaderPort=" + leaderPort + ", taskId=" + taskId + ", stageIdx=" + stageIdx + ", operatorType=" + operatorType + ", isFinal=" + isFinal + ", outputFile=" + outputFile + ", workerHost=" + workerHost + ", operatorArgs=" + operatorArgs + ", ringJson=" + ringJson);
 
         // Load downstream info—this would come from a config or leader message
         List<DownstreamTarget> downstream = RoutingLoader.load(taskId);
 
-        WorkerTask worker = new WorkerTask(leaderIp, leaderPort, taskId, operatorType, isFinal, operatorArgs, downstream, stageIdx, outputFile);
+        // Deserialize ring object
+        Ring ring = mapper.readValue(ringJson, Ring.class);
+
+        WorkerTask worker = new WorkerTask(leaderIp, leaderPort, taskId, operatorType, isFinal, operatorArgs, downstream, stageIdx, outputFile, ring, workerHost);
         worker.runTask();
     }
 
@@ -158,16 +168,16 @@ public class WorkerTask {
         operatorProc = pb.start();
 
         // combine python process output
-        new Thread(() -> {
-            try (BufferedReader br = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()))) {
-                String line;
-                while ((line = br.readLine()) != null) {
-                    System.out.println("[PYTHON OUTPUT] " + line);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }).start();
+        // new Thread(() -> {
+        //     try (BufferedReader br = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()))) {
+        //         String line;
+        //         while ((line = br.readLine()) != null) {
+        //             System.out.println("[PYTHON OUTPUT] " + line);
+        //         }
+        //     } catch (Exception e) {
+        //         e.printStackTrace();
+        //     }
+        // }).start();
 
         opStdin = new BufferedWriter(new OutputStreamWriter(operatorProc.getOutputStream()));
         opStdout = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()));
@@ -481,7 +491,7 @@ class RoutingLoader {
         // leader will place routing files on VM
         List<DownstreamTarget> targets = new ArrayList<>();
         //Make sure this routing file path matches with what the server wrote to
-        String filename = "/tmp/routing_" + taskId + ".conf";
+        String filename = "routing/routing_" + taskId + ".conf";
 
         try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
             String first = br.readLine();

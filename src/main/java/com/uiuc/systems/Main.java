@@ -444,7 +444,8 @@ public class Main {
                         hw,
                         operatorsAndArgs,
                         hydfsSrc,
-                        hydfsDest
+                        hydfsDest,
+                        ring
                     );
 
                     // keep global reference so Main can query it later
