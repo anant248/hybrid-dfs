@@ -34,7 +34,7 @@ public class WorkerTask {
 
     private static final ObjectMapper mapper = new ObjectMapper();
 
-//    HyDFS hdfs = GlobalHyDFS.getHdfs();
+    HyDFS hdfs = GlobalHyDFS.getHdfs();
     private static final List<String> ips = Arrays.asList("fa25-cs425-7602.cs.illinois.edu", "fa25-cs425-7603.cs.illinois.edu", "fa25-cs425-7604.cs.illinois.edu", "fa25-cs425-7605.cs.illinois.edu", "fa25-cs425-7606.cs.illinois.edu", "fa25-cs425-7607.cs.illinois.edu", "fa25-cs425-7608.cs.illinois.edu", "fa25-cs425-7609.cs.illinois.edu", "fa25-cs425-7610.cs.illinois.edu");
 
     private final AtomicLong tuplesCount = new AtomicLong(0);
@@ -60,13 +60,6 @@ public class WorkerTask {
 
     private static final int MAX_RETRIES = 3;
 
-    private final List<String> logBuffer = new ArrayList<>();
-
-    private static final int LOG_BATCH_SIZE = 500;
-
-    private static final long LOG_FLUSH_INTERVAL_MS = 5000L;
-
-
     public WorkerTask(String leaderIp, int leaderPort, int taskId, String operator, boolean isFinal, List<String> operatorArgs, List<DownstreamTarget> downstream,int stageIdx, String outputFile) {
         this.leaderIp = leaderIp;
         this.leaderPort = leaderPort;
@@ -77,20 +70,19 @@ public class WorkerTask {
         this.downstream.addAll(downstream);
         this.stageIdx = stageIdx;
         this.OUTPUT_FILE = outputFile;
-//        this.taskLogPath = "append_log/rainstorm_task_" + taskId + ".log";
-        this.taskLogPath = "rainstorm_task_" + taskId + ".log";
+        this.taskLogPath = "/append_log/rainstorm_task_" + taskId + ".log";
         boolean logFileExists = rebuildStateFromLog();
-//
-//        // if rebuildState was false, create an empty log file in HyDFS, otherwise the appends will fail
-//        // if rebuildState was true, the log file already exists
-//        if (!logFileExists) {
-//            try {
-//                hdfs.sendCreateEmptyFileToOwner(taskLogPath);
-//                System.out.println("Task " + taskId + ": created new HyDFS log file " + taskLogPath);
-//            } catch (Exception e) {
-//                logger.error("Task {}: failed to create HyDFS log file {}", taskId, taskLogPath, e);
-//            }
-//        }
+
+        // if rebuildState was false, create an empty log file in HyDFS, otherwise the appends will fail
+        // if rebuildState was true, the log file already exists
+        if (!logFileExists) {
+            try {
+                hdfs.sendCreateEmptyFileToOwner(taskLogPath);
+                System.out.println("Task " + taskId + ": created new HyDFS log file " + taskLogPath);
+            } catch (Exception e) {
+                logger.error("Task {}: failed to create HyDFS log file {}", taskId, taskLogPath, e);
+            }
+        }
     }
 
     public static void main(String[] args) throws Exception {
@@ -129,12 +121,6 @@ public class WorkerTask {
         startInputServer();
         startRetryThread();
 
-
-        startPeriodicLogFlushThread();
-
-        // Best-effort flush on clean shutdown
-        Runtime.getRuntime().addShutdownHook(new Thread(this::flushLogBuffer));
-
         // Start stdout reader thread
         new Thread(this::stdoutReaderLoop).start();
 
@@ -155,10 +141,10 @@ public class WorkerTask {
         cmd.add("python3");
 
         switch (operator) {
-            case "filter": cmd.add("/home/ahm7/mp4-g76/src/main/java/utils/operator_filter.py"); break;
-            case "transform": cmd.add("/home/ahm7/mp4-g76/src/main/java/utils/operator_transform.py"); break;
-            case "aggregate": cmd.add("/home/ahm7/mp4-g76/src/main/java/utils/operator_aggregate.py"); break;
-            case "identity": cmd.add("/home/ahm7/mp4-g76/src/main/java/utils/operator_identity.py"); break;
+            case "filter": cmd.add("/home/anantg2/mp4-g76/src/main/java/utils/operator_filter.py"); break;
+            case "transform": cmd.add("/home/anantg2/mp4-g76/src/main/java/utils/operator_transform.py"); break;
+            case "aggregate": cmd.add("/home/anantg2/mp4-g76/src/main/java/utils/operator_aggregate.py"); break;
+            case "identity": cmd.add("/home/anantg2/mp4-g76/src/main/java/utils/operator_identity.py"); break;
             default:
                 System.err.println("Unknown operator: " + operator);
                 System.exit(1);
@@ -172,19 +158,16 @@ public class WorkerTask {
         operatorProc = pb.start();
 
         // combine python process output
-
-        //WE SHOULD HAVE ONLY ONE READER i.e., only on operatorProc.getInputStream()
-
-//        new Thread(() -> {
-//            try (BufferedReader br = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()))) {
-//                String line;
-//                while ((line = br.readLine()) != null) {
-//                    System.out.println("[PYTHON OUTPUT] " + line);
-//                }
-//            } catch (Exception e) {
-//                e.printStackTrace();
-//            }
-//        }).start();
+        new Thread(() -> {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    System.out.println("[PYTHON OUTPUT] " + line);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
 
         opStdin = new BufferedWriter(new OutputStreamWriter(operatorProc.getOutputStream()));
         opStdout = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()));
@@ -194,14 +177,12 @@ public class WorkerTask {
         try {
             String line;
             while ((line = opStdout.readLine()) != null) {
-                System.out.println("[WORKER TASK] PRINT FINAL: "+ isFinal);
                 // if final task, write to HyDFS (stubbed here)
                 if (isFinal) {
                     System.out.println(line);
                     
                     // write out to final output file in HyDFS 
-//                    hdfs.appendTuple(OUTPUT_FILE, line + "\n");
-                    sendFinalToLeader(line);
+                    hdfs.appendTuple(OUTPUT_FILE, line + "\n");
                 } 
                 // else, forward to downstream tasks
                 else {
@@ -212,17 +193,6 @@ public class WorkerTask {
             System.err.println("Task " + taskId + ": operator stdout closed.");
         }
     }
-
-    private void sendFinalToLeader(String line) {
-        try (Socket s = new Socket(leaderIp, leaderPort);
-             ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream())) {
-            out.writeObject(new FinalTuple(taskId, line));
-            out.flush();
-        } catch (Exception e) {
-            logger.error("Task {} failed to send final tuple to leader", taskId, e);
-        }
-    }
-
 
     private void forwardTuple(String output, int retryCount) {
         try {
@@ -395,147 +365,43 @@ public class WorkerTask {
         return 10000 + taskId;
     }
 
-//    private boolean rebuildStateFromLog() {
-//        try {
-//            String hdfsName = taskLogPath;
-//
-//            // download log file from HyDFS to local
-//            String localName = "task_" + taskId + "_log_local.txt";
-//
-//            boolean ok = hdfs.getHyDFSFileToLocalFileFromOwner(hdfsName, localName);
-//            if (!ok) {
-//                logger.info("No prior log found for task {}", taskId);
-//                return false;
-//            }
-//            List<String> lines = Files.readAllLines(Paths.get("output/" + localName));
-//            for (String line : lines) {
-//                if (line.startsWith("INPUT ")) {
-//                    String tupleId = line.split(" ")[1];
-//                    seenInputTuples.add(tupleId);
-//                }
-//            }
-//            logger.info("Task {} rebuilt state: {} tuples", taskId, seenInputTuples.size());
-//
-//            return true;
-//
-//        } catch (Exception e) {
-//            logger.error("Task {} failed to rebuild state", taskId, e);
-//            return false;
-//        }
-//    }
-
     private boolean rebuildStateFromLog() {
-        try (Socket s = new Socket(leaderIp, leaderPort);
-             ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream());
-             ObjectInputStream in = new ObjectInputStream(s.getInputStream())) {
-            out.flush();
-            out.writeObject(new LoadStateRequest(taskId));
-            out.flush();
-            Object resp = in.readObject();
-            System.out.println("RECEIVED APPEND LOG STATE FROM THE LEADER");
-            if (resp instanceof LoadStateResponse) {
-                System.out.println("RECEIVED APPEND LOG STATE RESPONSE FROM THE LEADER");
-                LoadStateResponse r = (LoadStateResponse) resp;
-                for (String tupleId : r.getProcessedTupleIds()) {
+        try {
+            String hdfsName = taskLogPath;
+
+            // download log file from HyDFS to local
+            String localName = "task_" + taskId + "_log_local.txt";
+
+            boolean ok = hdfs.getHyDFSFileToLocalFileFromOwner(hdfsName, localName);
+            if (!ok) {
+                logger.info("No prior log found for task {}", taskId);
+                return false;
+            }
+            List<String> lines = Files.readAllLines(Paths.get("output/" + localName));
+            for (String line : lines) {
+                if (line.startsWith("INPUT ")) {
+                    String tupleId = line.split(" ")[1];
                     seenInputTuples.add(tupleId);
                 }
-                System.out.println("Task " + taskId + ": restored " + r.getProcessedTupleIds().size() + " entries from log.");
-                return true;
             }
-        } catch (Exception e) {
-            System.err.println("Task " + taskId + ": failed to rebuild state from leader");
-        }
-        return false;
-    }
+            logger.info("Task {} rebuilt state: {} tuples", taskId, seenInputTuples.size());
 
+            return true;
+
+        } catch (Exception e) {
+            logger.error("Task {} failed to rebuild state", taskId, e);
+            return false;
+        }
+    }
 
     private void appendToTaskLog(String logLine) {
-//        try {
-//            // append to the tasks log file in HyDFS
-////            hdfs.appendTuple(taskLogPath, logLine + "\n");
-//            sendLogLineToLeader(logLine);
-//        } catch (Exception e) {
-//            logger.error("Task {}: failed to append to HyDFS log {}", taskId, taskLogPath, e);
-//        }
-        synchronized (this) {
-            logBuffer.add(logLine + "\n");
-            if (logBuffer.size() >= LOG_BATCH_SIZE) {
-                flushLogBufferLocked();
-            }
-        }
-    }
-
-    private void flushLogBuffer() {
-        synchronized (this) {
-            flushLogBufferLocked();
-        }
-    }
-
-    private void flushLogBufferLocked() {
-//        if (logBuffer.isEmpty()) return;
-//
-//        try {
-//            String batch = String.join("", logBuffer);
-//            // One HyDFS append for all buffered log lines
-//            hdfs.appendTuple(taskLogPath, batch);
-//            logger.debug("Task {} flushed {} log lines to {}", taskId, logBuffer.size(), taskLogPath);
-//        } catch (Exception e) {
-//            logger.error("Task {}: failed to flush log buffer to {}", taskId, taskLogPath, e);
-//        } finally {
-//            logBuffer.clear();
-//        }
-            if (logBuffer.isEmpty()) return;
-
-            List<String> batch = new ArrayList<>(logBuffer);
-            logBuffer.clear();
-
-            sendLogBatchToLeader(batch);
-    }
-
-    private void sendLogBatchToLeader(List<String> batch) {
-        System.out.println("[WORKER TASK] SENDING BATCH APPEND LOG REQUEST TO LEADER");
-        try (Socket s = new Socket(leaderIp, leaderPort);
-             ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream())) {
-
-            WorkerLogBatch obj = new WorkerLogBatch(taskId, batch);
-            out.writeObject(obj);
-            out.flush();
-
+        try {
+            // append to the tasks log file in HyDFS
+            hdfs.appendTuple(taskLogPath, logLine + "\n");
         } catch (Exception e) {
-            logger.error("Task {} failed sending log batch to leader", taskId, e);
+            logger.error("Task {}: failed to append to HyDFS log {}", taskId, taskLogPath, e);
         }
     }
-
-
-    private void startPeriodicLogFlushThread() {
-        Thread t = new Thread(() -> {
-            while (true) {
-                try {
-                    Thread.sleep(LOG_FLUSH_INTERVAL_MS);
-                    flushLogBuffer();
-                } catch (Exception e) {
-                    logger.error("Task {} log flush thread crashed", taskId, e);
-                }
-            }
-        });
-
-        t.setDaemon(true);
-        t.start();
-        logger.info("Task {} started periodic log flush thread", taskId);
-    }
-
-    private void sendLogLineToLeader(String logLine) {
-        System.out.println("[WORKER TASK]: SENDING REQUEST TO LEADER TO APPEND THE LOG LINE");
-        try (Socket s = new Socket(leaderIp, leaderPort);
-             ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream())) {
-
-            out.writeObject(new TaskLogMessage(taskId, logLine));
-            out.flush();
-        } catch (Exception e) {
-            logger.error("Task {} failed to send log line to leader", taskId, e);
-        }
-    }
-
 
     private void startAckServer() {
         int ackPort = 10000 + taskId;
@@ -569,7 +435,7 @@ public class WorkerTask {
         Thread reporter = new Thread(() -> {
             while (true) {
                 try {
-                    Thread.sleep(3000);
+                    Thread.sleep(1000);
                     long count = tuplesCount.getAndSet(0);
                     WorkerTaskLoad report = new WorkerTaskLoad(taskId, stageIdx, count);
                     sendLoadStatus(report);
@@ -615,7 +481,7 @@ class RoutingLoader {
         // leader will place routing files on VM
         List<DownstreamTarget> targets = new ArrayList<>();
         //Make sure this routing file path matches with what the server wrote to
-        String filename = "routing/routing_" + taskId + ".conf";
+        String filename = "/tmp/routing_" + taskId + ".conf";
 
         try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
             String first = br.readLine();

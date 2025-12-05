@@ -42,15 +42,14 @@ public class WorkerTaskServer implements Runnable{
     }
 
     private static void handle(Socket socket) {
-        try (ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
+        try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
+             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
         ) {
             //TODO: DO WE HAVE TO FLUSH INITIALLY TO EXCHANGE HEADERS?
             out.flush();
             Object obj = in.readObject();
             if (obj instanceof WorkerTaskRoutingFileRequest) {
-                Files.createDirectories(Paths.get("routing"));
-                String path = "routing/routing_" + ((WorkerTaskRoutingFileRequest) obj).getTaskId() + ".conf";
+                String path = "/tmp/routing_" + ((WorkerTaskRoutingFileRequest) obj).getTaskId() + ".conf";
                 Files.writeString(Paths.get(path), ((WorkerTaskRoutingFileRequest) obj).getFileContent());
                 System.out.println("Routing file created at: " + path);
             }
@@ -59,7 +58,7 @@ public class WorkerTaskServer implements Runnable{
                 List<String> cmd = new ArrayList<>();
                 cmd.add("java");
                 cmd.add("-cp");
-                cmd.add("/home/ahm7/mp4-g76/target/HybridDistributedFileSystem-1.0-SNAPSHOT.jar");
+                cmd.add("/home/anantg2/mp4-g76/target/HybridDistributedFileSystem-1.0-SNAPSHOT.jar");
                 cmd.add("com.uiuc.systems.WorkerTask");
                 cmd.add(((StartWorkerTaskRequest) obj).getLeaderIp());
                 Integer port = ((StartWorkerTaskRequest) obj).getLeaderPort();

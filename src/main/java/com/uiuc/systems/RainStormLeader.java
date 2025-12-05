@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.*;
 import java.net.Socket;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -102,15 +101,6 @@ public class RainStormLeader {
                 TaskInfo ti = new TaskInfo(id,stage,i,vm);
                 tasks.put(id, ti);
                 LeaderLoggerHelper.taskStart(stage,id,vm);
-//                String logPath = "append_log/rainstorm_task_" + id + ".log";
-                String logPath = "rainstorm_task_" + id + ".log";
-                try {
-                    hdfs.sendCreateEmptyFileToOwner(logPath);
-                    System.out.println("[Leader] Created log file for task " + id + ": " + logPath);
-                } catch (Exception e) {
-                    System.err.println("[Leader] Failed to create log file for task " + id);
-                    e.printStackTrace();
-                }
                 id++;
             }
         }
@@ -153,7 +143,7 @@ public class RainStormLeader {
             System.out.println("SourceProcess: started streaming input to " + stage0Tasks + " Stage 0 tasks.");
             int lineNum = 0;
             ObjectMapper mapper = new ObjectMapper();
-            long sleepMicros = (long)(1_000_000.0 / inputRate);
+            long sleepMicros = (long)(1_000_000.0 / inputRate); // enforce input rate
 
             try (BufferedReader br = new BufferedReader(new FileReader(Paths.get("inputs/" + localInput).toString()))) {
                 String line;
@@ -174,7 +164,7 @@ public class RainStormLeader {
                     w.flush();
 
                     lineNum++;
-//                    Thread.sleep(0, (int)sleepMicros);
+                    Thread.sleep(0, (int)sleepMicros);
                 }
 
             } catch (Exception e) {
@@ -235,8 +225,6 @@ public class RainStormLeader {
 
     private void launchSingleWorkerTask(TaskInfo t, String operatorType, List<String> operatorArgs) {
         boolean isFinal = (t.stageIdx == numStages - 1);
-        System.out.println("[LEADER launchSingleWorkerTask] STAGE IDX: "+ t.stageIdx);
-        System.out.println("[LEADER launchSingleWorkerTask] numStages: "+ numStages);
         StartWorkerTaskRequest req = new StartWorkerTaskRequest(leaderHost, LEADER_PORT, t.globalTaskId, t.stageIdx, operatorType, isFinal, operatorArgs, hydfsDestFileName);
 
         System.out.println("Launching WorkerTask " + t.globalTaskId + " on host " + t.host + " for stage " + t.stageIdx + " with operator " + operatorType);
@@ -475,55 +463,6 @@ public class RainStormLeader {
             }
         }
         LeaderLoggerHelper.taskScaleDown(stage, workerTaskIdToBeKilled, taskToBeKilled.host);
-    }
-
-    public void handleFinalTuple(FinalTuple ft) {
-        try {
-            hdfs.appendTuple(hydfsDestFileName, ft.getLine() + "\n");
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void handleTaskLog(WorkerLogBatch m) {
-//        String path = "append_log/rainstorm_task_" + m.getTaskId() + ".log";
-        String path = "rainstorm_task_" + m.getTaskId() + ".log";
-        String combined = String.join("\n", m.getLines());
-        try {
-            hdfs.appendTuple(path, combined);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void handleLoadState(LoadStateRequest req, ObjectOutputStream out) {
-        int taskId = req.getTaskId();
-//        String path = "append_log/rainstorm_task_" + taskId + ".log";
-        String path = "rainstorm_task_" + taskId + ".log";
-
-        List<String> processed = new ArrayList<>();
-        try {
-            String localTmp = "task_" + taskId + "_restore.txt";
-            boolean ok = hdfs.getHyDFSFileToLocalFileFromOwner(path, localTmp);
-
-            if (ok) {
-                List<String> lines = Files.readAllLines(Paths.get("output/" + localTmp));
-                for (String line : lines) {
-                    if (line.startsWith("INPUT ")) {
-                        processed.add(line.split(" ")[1]);
-                    }
-                }
-            }
-            out.writeObject(new LoadStateResponse(processed));
-            out.flush();
-            System.out.println("Leader: sent " + processed.size() + " processed tuples for task " + taskId);
-        } catch (Exception e) {
-            e.printStackTrace();
-            try {
-                out.writeObject(new LoadStateResponse(Collections.emptyList()));
-                out.flush();
-            } catch (IOException ignored) {}
-        }
     }
 
     /* Getter method to return an immutable copy of the tasks map */

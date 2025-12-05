@@ -1,7 +1,6 @@
 package com.uiuc.systems;
 
 import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -37,9 +36,7 @@ public class LeaderServer implements Runnable {
     }
 
     private void handle(Socket socket) {
-        try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
-             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());) {
-            out.flush();
+        try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
             Object obj = in.readObject();
 
             if (obj instanceof WorkerTaskFailRequest) {
@@ -48,20 +45,6 @@ public class LeaderServer implements Runnable {
                 leader.workerTaskFailureHandler(req);
             } else if (obj instanceof WorkerTaskLoad) {
                 leader.processWorkerTaskLoad((WorkerTaskLoad) obj);
-            } else if (obj instanceof FinalTuple) {
-                leader.handleFinalTuple((FinalTuple) obj);
-            }
-            else if (obj instanceof TaskLogMessage) {
-//                leader.handleTaskLog((TaskLogMessage) obj);
-            }else if (obj instanceof LoadStateRequest) {
-                LoadStateRequest req = (LoadStateRequest) obj;
-                leader.handleLoadState(req, out);
-            } else if(obj instanceof WorkerLogBatch){
-                WorkerLogBatch b = (WorkerLogBatch) obj;
-//                String file = "rainstorm_task_" + b.getTaskId() + ".log";
-//
-//                String combined = String.join("\n", b.getLines()) + "\n";
-                leader.handleTaskLog(b);
             }
         } catch (Exception e) {
             System.err.println("Leader failed to handle request: " + e);

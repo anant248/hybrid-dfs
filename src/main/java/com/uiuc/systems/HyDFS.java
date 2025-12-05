@@ -94,14 +94,6 @@ public class HyDFS {
            List<NodeId> fileReplicas = ring.getReplicas(fileName);
            NodeId owner = fileReplicas.get(0);
            File file = new File("hdfs/" + fileName);
-
-           //TEST THIS FIX FOR APPEND
-            File parentDir = file.getParentFile();
-            if (!parentDir.exists()) {
-                parentDir.mkdirs();
-            }
-
-
            try (FileOutputStream fos = new FileOutputStream(file)) {
                fos.write(req.getFileData());
            } catch (IOException e) {
@@ -356,7 +348,6 @@ public class HyDFS {
             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
 
             // Convert tuple to bytes
-            // why \n?
             byte[] tupleData = (tuple + "\n").getBytes(StandardCharsets.UTF_8);
 
             AppendRequest ownerAppendRequest = new AppendRequest(tupleData, hdfsFileName);
@@ -866,6 +857,7 @@ public class HyDFS {
             } catch (Exception e) {
                 //handle the exception?
                 System.out.println("Node " + node.getIp() + " did not contain the hdfs file " + fileName);
+                
             }
         }
         return valid;
