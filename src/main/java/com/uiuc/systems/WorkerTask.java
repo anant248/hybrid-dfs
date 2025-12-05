@@ -312,7 +312,10 @@ public class WorkerTask {
                     logger.debug("Task {} dropping duplicate tuple {}", taskId, tupleId);
                     
                     // ack back to upstream even in case of duplicate
-                    sendAck(upstreamTask, tupleId);
+                    // only send ack if upstreamTask is not -1 (source task)
+                    if (upstreamTask != -1) {
+                        sendAck(upstreamTask, tupleId);
+                    }
                     continue;
                 }
 
@@ -322,9 +325,13 @@ public class WorkerTask {
                 // forward to operator stdin
                 opStdin.write(line + "\n");
                 opStdin.flush();
-                sendAck(upstreamTask,tupleId);
+
+                // only send ack if upstreamTask is not -1 (source task)
+                if (upstreamTask != -1) {
+                    sendAck(upstreamTask,tupleId);
                 }
             }
+        }
         catch (Exception e) {
             logger.error("Task {} handleClient error", taskId, e);
         }
@@ -333,7 +340,7 @@ public class WorkerTask {
     private void sendAck(int upstreamTaskId, String tupleId) {
         try {
             String host = hostOf(upstreamTaskId);
-            int port = 10000 + upstreamTaskId;
+            int port = portOf(upstreamTaskId);
 
             try (Socket sock = new Socket(host, port);
                  ObjectOutputStream out = new ObjectOutputStream(sock.getOutputStream())) {
@@ -347,7 +354,15 @@ public class WorkerTask {
     }
 
     private String hostOf(int taskId){
+        if (taskId == -1) return leaderIp; // source task
+
         return ips.get(taskId%ips.size());
+    }
+
+    private int portOf(int taskId){
+        if (taskId == -1) return leaderPort; // source task
+
+        return 10000 + taskId;
     }
 
     private boolean rebuildStateFromLog() {

@@ -103,4 +103,39 @@ Logging commands:
 java src/main/java/server/QueryServer.java "filepath/filename"
 java src/main/java/client/DistributedLogQuerierClient.java "grep options" "query"
 
+---------------------------------------------------------------------- MP4 CMDS ------------------------------------------------------------------------------------
+
+ssh anantg2@fa25-cs425-76XX.cs.illinois.edu
+
+mvn clean package
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="localhost localhost gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7601.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7602.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7603.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7604.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7605.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7606.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7607.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7608.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7609.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-7610.cs.illinois.edu fa25-cs425-7601.cs.illinois.edu gossip nosuspect"
+
+Logging commands:
+java src/main/java/server/QueryServer.java "filepath/filename"
+java src/main/java/client/DistributedLogQuerierClient.java "grep options" "query"
+
+rainstorm 1 1 identity "" dataset1.csv output.txt true false 100 100 100
+
+rainstorm 2 3 identity "" identity "" dataset1.csv output.txt true false 100 100 100
 

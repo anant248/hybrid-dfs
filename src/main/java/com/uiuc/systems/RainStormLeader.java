@@ -35,6 +35,8 @@ public class RainStormLeader {
 
     HyDFS hdfs = GlobalHyDFS.getHdfs();
 
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(WorkerTask.class);
+
     static class TaskInfo {
         final int globalTaskId;
         final int stageIdx;
@@ -70,7 +72,11 @@ public class RainStormLeader {
         System.out.println("RainStorm Leader starting on host " + leaderHost);
 
         // create the destination file in HyDFS
-        hdfs.sendCreateEmptyFileToOwner(hydfsDestFileName);
+        try {
+            hdfs.sendCreateEmptyFileToOwner(hydfsDestFileName);
+        } catch (Exception e) {
+            logger.error("Leader: failed to create destination file {} in HyDFS", hydfsDestFileName, e);
+        }
 
         new Thread(new LeaderServer(this, LEADER_PORT)).start();
         initializeTasks();
@@ -127,7 +133,7 @@ public class RainStormLeader {
                     Socket s = new Socket(t.host, 9000 + t.globalTaskId);
                     sockets.add(s);
                     writers.add(new BufferedWriter(new OutputStreamWriter(s.getOutputStream())));
-                    
+
                     System.out.println("These are the tasks to write to: " + writers);
                 } catch (Exception e) {
                     e.printStackTrace();
