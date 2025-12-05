@@ -485,11 +485,12 @@ public class RainStormLeader {
         }
     }
 
-    public void handleTaskLog(TaskLogMessage m) {
+    public void handleTaskLog(WorkerLogBatch m) {
 //        String path = "append_log/rainstorm_task_" + m.getTaskId() + ".log";
         String path = "rainstorm_task_" + m.getTaskId() + ".log";
+        String combined = String.join("\n", m.getLines());
         try {
-            hdfs.appendTuple(path, m.getLogLine() + "\n");
+            hdfs.appendTuple(path, combined);
         } catch (Exception e) {
             e.printStackTrace();
         }

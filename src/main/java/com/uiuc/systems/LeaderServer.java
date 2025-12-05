@@ -52,10 +52,16 @@ public class LeaderServer implements Runnable {
                 leader.handleFinalTuple((FinalTuple) obj);
             }
             else if (obj instanceof TaskLogMessage) {
-                leader.handleTaskLog((TaskLogMessage) obj);
+//                leader.handleTaskLog((TaskLogMessage) obj);
             }else if (obj instanceof LoadStateRequest) {
                 LoadStateRequest req = (LoadStateRequest) obj;
                 leader.handleLoadState(req, out);
+            } else if(obj instanceof WorkerLogBatch){
+                WorkerLogBatch b = (WorkerLogBatch) obj;
+//                String file = "rainstorm_task_" + b.getTaskId() + ".log";
+//
+//                String combined = String.join("\n", b.getLines()) + "\n";
+                leader.handleTaskLog(b);
             }
         } catch (Exception e) {
             System.err.println("Leader failed to handle request: " + e);

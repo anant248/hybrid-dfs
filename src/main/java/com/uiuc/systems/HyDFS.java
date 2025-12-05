@@ -356,6 +356,7 @@ public class HyDFS {
             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
 
             // Convert tuple to bytes
+            // why \n?
             byte[] tupleData = (tuple + "\n").getBytes(StandardCharsets.UTF_8);
 
             AppendRequest ownerAppendRequest = new AppendRequest(tupleData, hdfsFileName);

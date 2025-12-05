@@ -60,6 +60,13 @@ public class WorkerTask {
 
     private static final int MAX_RETRIES = 3;
 
+    private final List<String> logBuffer = new ArrayList<>();
+
+    private static final int LOG_BATCH_SIZE = 500;
+
+    private static final long LOG_FLUSH_INTERVAL_MS = 5000L;
+
+
     public WorkerTask(String leaderIp, int leaderPort, int taskId, String operator, boolean isFinal, List<String> operatorArgs, List<DownstreamTarget> downstream,int stageIdx, String outputFile) {
         this.leaderIp = leaderIp;
         this.leaderPort = leaderPort;
@@ -122,6 +129,12 @@ public class WorkerTask {
         startInputServer();
         startRetryThread();
 
+
+        startPeriodicLogFlushThread();
+
+        // Best-effort flush on clean shutdown
+        Runtime.getRuntime().addShutdownHook(new Thread(this::flushLogBuffer));
+
         // Start stdout reader thread
         new Thread(this::stdoutReaderLoop).start();
 
@@ -181,6 +194,7 @@ public class WorkerTask {
         try {
             String line;
             while ((line = opStdout.readLine()) != null) {
+                System.out.println("[WORKER TASK] PRINT FINAL: "+ isFinal);
                 // if final task, write to HyDFS (stubbed here)
                 if (isFinal) {
                     System.out.println(line);
@@ -418,7 +432,9 @@ public class WorkerTask {
             out.writeObject(new LoadStateRequest(taskId));
             out.flush();
             Object resp = in.readObject();
+            System.out.println("RECEIVED APPEND LOG STATE FROM THE LEADER");
             if (resp instanceof LoadStateResponse) {
+                System.out.println("RECEIVED APPEND LOG STATE RESPONSE FROM THE LEADER");
                 LoadStateResponse r = (LoadStateResponse) resp;
                 for (String tupleId : r.getProcessedTupleIds()) {
                     seenInputTuples.add(tupleId);
@@ -434,13 +450,78 @@ public class WorkerTask {
 
 
     private void appendToTaskLog(String logLine) {
-        try {
-            // append to the tasks log file in HyDFS
-//            hdfs.appendTuple(taskLogPath, logLine + "\n");
-            sendLogLineToLeader(logLine);
-        } catch (Exception e) {
-            logger.error("Task {}: failed to append to HyDFS log {}", taskId, taskLogPath, e);
+//        try {
+//            // append to the tasks log file in HyDFS
+////            hdfs.appendTuple(taskLogPath, logLine + "\n");
+//            sendLogLineToLeader(logLine);
+//        } catch (Exception e) {
+//            logger.error("Task {}: failed to append to HyDFS log {}", taskId, taskLogPath, e);
+//        }
+        synchronized (this) {
+            logBuffer.add(logLine + "\n");
+            if (logBuffer.size() >= LOG_BATCH_SIZE) {
+                flushLogBufferLocked();
+            }
         }
+    }
+
+    private void flushLogBuffer() {
+        synchronized (this) {
+            flushLogBufferLocked();
+        }
+    }
+
+    private void flushLogBufferLocked() {
+//        if (logBuffer.isEmpty()) return;
+//
+//        try {
+//            String batch = String.join("", logBuffer);
+//            // One HyDFS append for all buffered log lines
+//            hdfs.appendTuple(taskLogPath, batch);
+//            logger.debug("Task {} flushed {} log lines to {}", taskId, logBuffer.size(), taskLogPath);
+//        } catch (Exception e) {
+//            logger.error("Task {}: failed to flush log buffer to {}", taskId, taskLogPath, e);
+//        } finally {
+//            logBuffer.clear();
+//        }
+            if (logBuffer.isEmpty()) return;
+
+            List<String> batch = new ArrayList<>(logBuffer);
+            logBuffer.clear();
+
+            sendLogBatchToLeader(batch);
+    }
+
+    private void sendLogBatchToLeader(List<String> batch) {
+        System.out.println("[WORKER TASK] SENDING BATCH APPEND LOG REQUEST TO LEADER");
+        try (Socket s = new Socket(leaderIp, leaderPort);
+             ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream())) {
+
+            WorkerLogBatch obj = new WorkerLogBatch(taskId, batch);
+            out.writeObject(obj);
+            out.flush();
+
+        } catch (Exception e) {
+            logger.error("Task {} failed sending log batch to leader", taskId, e);
+        }
+    }
+
+
+    private void startPeriodicLogFlushThread() {
+        Thread t = new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(LOG_FLUSH_INTERVAL_MS);
+                    flushLogBuffer();
+                } catch (Exception e) {
+                    logger.error("Task {} log flush thread crashed", taskId, e);
+                }
+            }
+        });
+
+        t.setDaemon(true);
+        t.start();
+        logger.info("Task {} started periodic log flush thread", taskId);
     }
 
     private void sendLogLineToLeader(String logLine) {
