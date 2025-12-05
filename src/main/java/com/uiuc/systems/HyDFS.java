@@ -702,8 +702,17 @@ public class HyDFS {
      */
     public boolean getHyDFSFileToLocalFileFromOwner(String hdfsFileName, String localFileName) {
 
+        // check if the owner actually has the file
+        List<NodeId> hdfsFileReplicas = verifyExistingReplicas(ring.getReplicas(hdfsFileName),hdfsFileName);
+
+        // if no replicas, nothing to merge
+        if(hdfsFileReplicas.size() == 0){
+            System.out.println("No replicas for file: "+ hdfsFileName);
+            return false;
+        }
+
         // getting the hyDFS file from primary replica node
-        NodeId owner = ring.getPrimaryReplica(hdfsFileName);
+        NodeId owner = hdfsFileReplicas.get(0);
 
         try (Socket socket = new Socket(owner.getIp(), PORT);
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());

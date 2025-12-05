@@ -77,7 +77,7 @@ public class WorkerTask {
         // if rebuildState was true, the log file already exists
         if (!logFileExists) {
             try {
-                hdfs.sendCreateRequestToOwner("starting_log.log", taskLogPath);
+                hdfs.sendCreateEmptyFileToOwner(taskLogPath);
                 System.out.println("Task " + taskId + ": created new HyDFS log file " + taskLogPath);
             } catch (Exception e) {
                 logger.error("Task {}: failed to create HyDFS log file {}", taskId, taskLogPath, e);
@@ -121,14 +121,14 @@ public class WorkerTask {
         startInputServer();
         startRetryThread();
 
+        // Start stdout reader thread
+        new Thread(this::stdoutReaderLoop).start();
+
         // launch operator subprocess after servers are up
         launchOperator();
 
         System.out.println("WorkerTask " + taskId + " started operator " + operator);
         logger.info("Task {} launched operator {}", taskId, operator);
-
-        // Start stdout reader thread
-        new Thread(this::stdoutReaderLoop).start();
 
         System.out.println("Task " + taskId + ": started stdout reader thread");
         logger.info("Task {} started stdout reader thread", taskId);
@@ -158,16 +158,16 @@ public class WorkerTask {
         operatorProc = pb.start();
 
         // combine python process output
-        new Thread(() -> {
-            try (BufferedReader br = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()))) {
-                String line;
-                while ((line = br.readLine()) != null) {
-                    System.out.println("[PYTHON OUTPUT] " + line);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }).start();
+        // new Thread(() -> {
+        //     try (BufferedReader br = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()))) {
+        //         String line;
+        //         while ((line = br.readLine()) != null) {
+        //             System.out.println("[PYTHON OUTPUT] " + line);
+        //         }
+        //     } catch (Exception e) {
+        //         e.printStackTrace();
+        //     }
+        // }).start();
 
         opStdin = new BufferedWriter(new OutputStreamWriter(operatorProc.getOutputStream()));
         opStdout = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()));
