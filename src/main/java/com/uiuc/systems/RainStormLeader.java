@@ -277,7 +277,7 @@ public class RainStormLeader {
         String[] argsSplit = operatorsAndArgs.get(index).split(" ");
         return new ArrayList<>(Arrays.asList(argsSplit));
     }
-
+    
     // method invoked by Leader to send kill request to WorkerTaskServer on the worker VM
     public void killTask(String vmIp, int taskId, int pid) {
         boolean killSuccess = false;
