@@ -483,7 +483,7 @@ public class RainStormLeader {
     }
 
     public void handleTaskLog(TaskLogMessage m) {
-        String path = "/append_log/rainstorm_task_" + m.getTaskId() + ".log";
+        String path = "append_log/rainstorm_task_" + m.getTaskId() + ".log";
         try {
             hdfs.appendTuple(path, m.getLogLine() + "\n");
         } catch (Exception e) {
@@ -493,7 +493,7 @@ public class RainStormLeader {
 
     public void handleLoadState(LoadStateRequest req, ObjectOutputStream out) {
         int taskId = req.getTaskId();
-        String path = "/append_log/rainstorm_task_" + taskId + ".log";
+        String path = "append_log/rainstorm_task_" + taskId + ".log";
 
         List<String> processed = new ArrayList<>();
         try {

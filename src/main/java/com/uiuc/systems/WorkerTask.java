@@ -70,7 +70,7 @@ public class WorkerTask {
         this.downstream.addAll(downstream);
         this.stageIdx = stageIdx;
         this.OUTPUT_FILE = outputFile;
-        this.taskLogPath = "/append_log/rainstorm_task_" + taskId + ".log";
+        this.taskLogPath = "append_log/rainstorm_task_" + taskId + ".log";
         boolean logFileExists = rebuildStateFromLog();
 //
 //        // if rebuildState was false, create an empty log file in HyDFS, otherwise the appends will fail
