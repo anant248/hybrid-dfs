@@ -70,7 +70,8 @@ public class WorkerTask {
         this.downstream.addAll(downstream);
         this.stageIdx = stageIdx;
         this.OUTPUT_FILE = outputFile;
-        this.taskLogPath = "append_log/rainstorm_task_" + taskId + ".log";
+//        this.taskLogPath = "append_log/rainstorm_task_" + taskId + ".log";
+        this.taskLogPath = "rainstorm_task_" + taskId + ".log";
         boolean logFileExists = rebuildStateFromLog();
 //
 //        // if rebuildState was false, create an empty log file in HyDFS, otherwise the appends will fail
@@ -440,6 +441,7 @@ public class WorkerTask {
     }
 
     private void sendLogLineToLeader(String logLine) {
+        System.out.println("[WORKER TASK]: SENDING REQUEST TO LEADER TO APPEND THE LOG LINE");
         try (Socket s = new Socket(leaderIp, leaderPort);
              ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream())) {
 
@@ -483,7 +485,7 @@ public class WorkerTask {
         Thread reporter = new Thread(() -> {
             while (true) {
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(3000);
                     long count = tuplesCount.getAndSet(0);
                     WorkerTaskLoad report = new WorkerTaskLoad(taskId, stageIdx, count);
                     sendLoadStatus(report);
@@ -529,7 +531,7 @@ class RoutingLoader {
         // leader will place routing files on VM
         List<DownstreamTarget> targets = new ArrayList<>();
         //Make sure this routing file path matches with what the server wrote to
-        String filename = "/tmp/routing_" + taskId + ".conf";
+        String filename = "routing/routing_" + taskId + ".conf";
 
         try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
             String first = br.readLine();

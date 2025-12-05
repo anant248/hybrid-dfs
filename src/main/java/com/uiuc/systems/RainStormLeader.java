@@ -102,7 +102,8 @@ public class RainStormLeader {
                 TaskInfo ti = new TaskInfo(id,stage,i,vm);
                 tasks.put(id, ti);
                 LeaderLoggerHelper.taskStart(stage,id,vm);
-                String logPath = "append_log/rainstorm_task_" + id + ".log";
+//                String logPath = "append_log/rainstorm_task_" + id + ".log";
+                String logPath = "rainstorm_task_" + id + ".log";
                 try {
                     hdfs.sendCreateEmptyFileToOwner(logPath);
                     System.out.println("[Leader] Created log file for task " + id + ": " + logPath);
@@ -485,7 +486,8 @@ public class RainStormLeader {
     }
 
     public void handleTaskLog(TaskLogMessage m) {
-        String path = "append_log/rainstorm_task_" + m.getTaskId() + ".log";
+//        String path = "append_log/rainstorm_task_" + m.getTaskId() + ".log";
+        String path = "rainstorm_task_" + m.getTaskId() + ".log";
         try {
             hdfs.appendTuple(path, m.getLogLine() + "\n");
         } catch (Exception e) {
@@ -495,7 +497,8 @@ public class RainStormLeader {
 
     public void handleLoadState(LoadStateRequest req, ObjectOutputStream out) {
         int taskId = req.getTaskId();
-        String path = "append_log/rainstorm_task_" + taskId + ".log";
+//        String path = "append_log/rainstorm_task_" + taskId + ".log";
+        String path = "rainstorm_task_" + taskId + ".log";
 
         List<String> processed = new ArrayList<>();
         try {

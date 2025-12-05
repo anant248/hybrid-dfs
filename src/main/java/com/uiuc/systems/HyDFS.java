@@ -865,7 +865,6 @@ public class HyDFS {
             } catch (Exception e) {
                 //handle the exception?
                 System.out.println("Node " + node.getIp() + " did not contain the hdfs file " + fileName);
-                
             }
         }
         return valid;
