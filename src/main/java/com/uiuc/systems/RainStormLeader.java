@@ -153,7 +153,7 @@ public class RainStormLeader {
             System.out.println("SourceProcess: started streaming input to " + stage0Tasks + " Stage 0 tasks.");
             int lineNum = 0;
             ObjectMapper mapper = new ObjectMapper();
-            long sleepMicros = (long)(1_000_000.0 / inputRate); // enforce input rate
+            long sleepMicros = (long)(1_000_000.0 / inputRate);
 
             try (BufferedReader br = new BufferedReader(new FileReader(Paths.get("inputs/" + localInput).toString()))) {
                 String line;
@@ -174,7 +174,7 @@ public class RainStormLeader {
                     w.flush();
 
                     lineNum++;
-                    Thread.sleep(0, (int)sleepMicros);
+//                    Thread.sleep(0, (int)sleepMicros);
                 }
 
             } catch (Exception e) {
