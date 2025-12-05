@@ -200,7 +200,8 @@ public class WorkerTask {
                 }
             }
         } catch (Exception e) {
-            System.err.println("Task " + taskId + ": operator stdout closed.");
+            System.err.println("Task " + taskId + " stdout reader loop crashed: " + e);
+            e.printStackTrace();
         }
     }
 
@@ -231,7 +232,9 @@ public class WorkerTask {
                 w.flush();
             }
         } catch(Exception e){
+            System.err.println("Task " + taskId + " failed to forward tuple: " + e);
             logger.error("Failed to forward the tuple from task {}",taskId,e);
+            e.printStackTrace();
         }
     }
 
@@ -328,6 +331,9 @@ public class WorkerTask {
                     }
                     continue;
                 }
+
+                System.out.println("Task " + taskId + ": received tuple " + tupleId + " from upstream task " + upstreamTask);
+                System.out.println(line + "\n");
 
                 // add to seen set and log
                 seenInputTuples.add(tupleId);

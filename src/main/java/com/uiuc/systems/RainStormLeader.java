@@ -162,6 +162,10 @@ public class RainStormLeader {
                     js.put("line", line);
                     js.put("srcTask", -1);
 
+                    // Print if we are sending the tuple
+                    System.out.println("SourceProcess: sending tuple of id" + tid + " to Task " + stage0List.get(target).globalTaskId);
+                    System.out.println(js.toString() + "\n");
+
                     w.write(js.toString() + "\n");
                     w.flush();
 
@@ -170,6 +174,7 @@ public class RainStormLeader {
                 }
 
             } catch (Exception e) {
+                logger.error("SourceProcess: encountered error while streaming input", e);
                 e.printStackTrace();
             }
 

@@ -154,8 +154,8 @@ public class Main {
         System.out.println("  multiappend HyDFSfilename VMi ... VMj localfilenamei localfilenamej -> Launches appends from VMi,…VMj simultaneously to HyDFSfilename; VMi appends the contents of localfilenamei");
         System.out.println("  switch <protocol> <suspect/nosuspect>                                -> switch protocol and suspicion mode");
         System.out.println("  rainstorm <Nstages> <Ntasks_per_stage> <op1_exe> <op1_args> … <opNstages_exe> <opNstages_args> <hydfs_src_directory> <hydfs_dest_filename> <exactly_once> <autoscale_enabled> <INPUT_RATE> <LW> <HW>  -> start a RainStorm job (only on introducer node)");
-        System.out.println("  list_tasks                -> list all current RainStorm tasks (only on introducer node)");
-        System.out.println("  kill_task <VM> <PID>      -> kill a specific RainStorm task (only on introducer node)");
+        System.out.println("  list_tasks                          -> list all current RainStorm tasks (only on introducer node)");
+        System.out.println("  kill_task <VM> <Task Id> <PID>      -> kill a specific RainStorm task (only on introducer node)");
 
         // listen for terminal input
         Scanner sc = new Scanner(System.in);
@@ -533,7 +533,7 @@ public class Main {
         }
 
         // header
-        System.out.printf("%-8s | %-32s | %-8s | %-6s | %-15s | %-20s%n",
+        System.out.printf("%-8s | %-31s | %-8s | %-6s | %-15s | %-20s%n",
                 "TASKID", "VM", "PID", "STAGE", "OPERATOR", "LOGFILE");
         System.out.println("---------------------------------------------------------------------------------------");
 
