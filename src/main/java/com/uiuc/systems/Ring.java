@@ -1,11 +1,12 @@
 package com.uiuc.systems;
 
+import java.io.Serializable;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class Ring {
+public class Ring implements Serializable{
 
     private  TreeMap<BigInteger, NodeId> ring;
     private static final int NUM_REPLICAS = 5;
