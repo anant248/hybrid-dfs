@@ -49,7 +49,8 @@ public class WorkerTaskServer implements Runnable{
             out.flush();
             Object obj = in.readObject();
             if (obj instanceof WorkerTaskRoutingFileRequest) {
-                String path = "/tmp/routing_" + ((WorkerTaskRoutingFileRequest) obj).getTaskId() + ".conf";
+                Files.createDirectories(Paths.get("routing"));
+                String path = "/routing/routing_" + ((WorkerTaskRoutingFileRequest) obj).getTaskId() + ".conf";
                 Files.writeString(Paths.get(path), ((WorkerTaskRoutingFileRequest) obj).getFileContent());
                 System.out.println("Routing file created at: " + path);
             }

@@ -141,10 +141,10 @@ public class WorkerTask {
         cmd.add("python3");
 
         switch (operator) {
-            case "filter": cmd.add("/home/anantg2/mp4-g76/src/main/java/utils/operator_filter.py"); break;
-            case "transform": cmd.add("/home/anantg2/mp4-g76/src/main/java/utils/operator_transform.py"); break;
-            case "aggregate": cmd.add("/home/anantg2/mp4-g76/src/main/java/utils/operator_aggregate.py"); break;
-            case "identity": cmd.add("/home/anantg2/mp4-g76/src/main/java/utils/operator_identity.py"); break;
+            case "filter": cmd.add("/home/ahm7/mp4-g76/src/main/java/utils/operator_filter.py"); break;
+            case "transform": cmd.add("/home/ahm7/mp4-g76/src/main/java/utils/operator_transform.py"); break;
+            case "aggregate": cmd.add("/home/ahm7/mp4-g76/src/main/java/utils/operator_aggregate.py"); break;
+            case "identity": cmd.add("/home/ahm7/mp4-g76/src/main/java/utils/operator_identity.py"); break;
             default:
                 System.err.println("Unknown operator: " + operator);
                 System.exit(1);
