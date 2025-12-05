@@ -42,8 +42,8 @@ public class WorkerTaskServer implements Runnable{
     }
 
     private static void handle(Socket socket) {
-        try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
-             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+        try (ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
         ) {
             //TODO: DO WE HAVE TO FLUSH INITIALLY TO EXCHANGE HEADERS?
             out.flush();

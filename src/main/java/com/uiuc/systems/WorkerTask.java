@@ -72,17 +72,17 @@ public class WorkerTask {
         this.OUTPUT_FILE = outputFile;
         this.taskLogPath = "/append_log/rainstorm_task_" + taskId + ".log";
         boolean logFileExists = rebuildStateFromLog();
-
-        // if rebuildState was false, create an empty log file in HyDFS, otherwise the appends will fail
-        // if rebuildState was true, the log file already exists
-        if (!logFileExists) {
-            try {
-                hdfs.sendCreateEmptyFileToOwner(taskLogPath);
-                System.out.println("Task " + taskId + ": created new HyDFS log file " + taskLogPath);
-            } catch (Exception e) {
-                logger.error("Task {}: failed to create HyDFS log file {}", taskId, taskLogPath, e);
-            }
-        }
+//
+//        // if rebuildState was false, create an empty log file in HyDFS, otherwise the appends will fail
+//        // if rebuildState was true, the log file already exists
+//        if (!logFileExists) {
+//            try {
+//                hdfs.sendCreateEmptyFileToOwner(taskLogPath);
+//                System.out.println("Task " + taskId + ": created new HyDFS log file " + taskLogPath);
+//            } catch (Exception e) {
+//                logger.error("Task {}: failed to create HyDFS log file {}", taskId, taskLogPath, e);
+//            }
+//        }
     }
 
     public static void main(String[] args) throws Exception {
@@ -182,7 +182,8 @@ public class WorkerTask {
                     System.out.println(line);
                     
                     // write out to final output file in HyDFS 
-                    hdfs.appendTuple(OUTPUT_FILE, line + "\n");
+//                    hdfs.appendTuple(OUTPUT_FILE, line + "\n");
+                    sendFinalToLeader(line);
                 } 
                 // else, forward to downstream tasks
                 else {
@@ -193,6 +194,17 @@ public class WorkerTask {
             System.err.println("Task " + taskId + ": operator stdout closed.");
         }
     }
+
+    private void sendFinalToLeader(String line) {
+        try (Socket s = new Socket(leaderIp, leaderPort);
+             ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream())) {
+            out.writeObject(new FinalTuple(taskId, line));
+            out.flush();
+        } catch (Exception e) {
+            logger.error("Task {} failed to send final tuple to leader", taskId, e);
+        }
+    }
+
 
     private void forwardTuple(String output, int retryCount) {
         try {
@@ -365,43 +377,79 @@ public class WorkerTask {
         return 10000 + taskId;
     }
 
+//    private boolean rebuildStateFromLog() {
+//        try {
+//            String hdfsName = taskLogPath;
+//
+//            // download log file from HyDFS to local
+//            String localName = "task_" + taskId + "_log_local.txt";
+//
+//            boolean ok = hdfs.getHyDFSFileToLocalFileFromOwner(hdfsName, localName);
+//            if (!ok) {
+//                logger.info("No prior log found for task {}", taskId);
+//                return false;
+//            }
+//            List<String> lines = Files.readAllLines(Paths.get("output/" + localName));
+//            for (String line : lines) {
+//                if (line.startsWith("INPUT ")) {
+//                    String tupleId = line.split(" ")[1];
+//                    seenInputTuples.add(tupleId);
+//                }
+//            }
+//            logger.info("Task {} rebuilt state: {} tuples", taskId, seenInputTuples.size());
+//
+//            return true;
+//
+//        } catch (Exception e) {
+//            logger.error("Task {} failed to rebuild state", taskId, e);
+//            return false;
+//        }
+//    }
+
     private boolean rebuildStateFromLog() {
-        try {
-            String hdfsName = taskLogPath;
-
-            // download log file from HyDFS to local
-            String localName = "task_" + taskId + "_log_local.txt";
-
-            boolean ok = hdfs.getHyDFSFileToLocalFileFromOwner(hdfsName, localName);
-            if (!ok) {
-                logger.info("No prior log found for task {}", taskId);
-                return false;
-            }
-            List<String> lines = Files.readAllLines(Paths.get("output/" + localName));
-            for (String line : lines) {
-                if (line.startsWith("INPUT ")) {
-                    String tupleId = line.split(" ")[1];
+        try (Socket s = new Socket(leaderIp, leaderPort);
+             ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream());
+             ObjectInputStream in = new ObjectInputStream(s.getInputStream())) {
+            out.flush();
+            out.writeObject(new LoadStateRequest(taskId));
+            out.flush();
+            Object resp = in.readObject();
+            if (resp instanceof LoadStateResponse) {
+                LoadStateResponse r = (LoadStateResponse) resp;
+                for (String tupleId : r.getProcessedTupleIds()) {
                     seenInputTuples.add(tupleId);
                 }
+                System.out.println("Task " + taskId + ": restored " + r.getProcessedTupleIds().size() + " entries from log.");
+                return true;
             }
-            logger.info("Task {} rebuilt state: {} tuples", taskId, seenInputTuples.size());
-
-            return true;
-
         } catch (Exception e) {
-            logger.error("Task {} failed to rebuild state", taskId, e);
-            return false;
+            System.err.println("Task " + taskId + ": failed to rebuild state from leader");
         }
+        return false;
     }
+
 
     private void appendToTaskLog(String logLine) {
         try {
             // append to the tasks log file in HyDFS
-            hdfs.appendTuple(taskLogPath, logLine + "\n");
+//            hdfs.appendTuple(taskLogPath, logLine + "\n");
+            sendLogLineToLeader(logLine);
         } catch (Exception e) {
             logger.error("Task {}: failed to append to HyDFS log {}", taskId, taskLogPath, e);
         }
     }
+
+    private void sendLogLineToLeader(String logLine) {
+        try (Socket s = new Socket(leaderIp, leaderPort);
+             ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream())) {
+
+            out.writeObject(new TaskLogMessage(taskId, logLine));
+            out.flush();
+        } catch (Exception e) {
+            logger.error("Task {} failed to send log line to leader", taskId, e);
+        }
+    }
+
 
     private void startAckServer() {
         int ackPort = 10000 + taskId;

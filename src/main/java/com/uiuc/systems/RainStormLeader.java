@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.*;
 import java.net.Socket;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -101,6 +102,14 @@ public class RainStormLeader {
                 TaskInfo ti = new TaskInfo(id,stage,i,vm);
                 tasks.put(id, ti);
                 LeaderLoggerHelper.taskStart(stage,id,vm);
+                String logPath = "/append_log/rainstorm_task_" + id + ".log";
+                try {
+                    hdfs.sendCreateEmptyFileToOwner(logPath);
+                    System.out.println("[Leader] Created log file for task " + id + ": " + logPath);
+                } catch (Exception e) {
+                    System.err.println("[Leader] Failed to create log file for task " + id);
+                    e.printStackTrace();
+                }
                 id++;
             }
         }
@@ -463,6 +472,52 @@ public class RainStormLeader {
             }
         }
         LeaderLoggerHelper.taskScaleDown(stage, workerTaskIdToBeKilled, taskToBeKilled.host);
+    }
+
+    public void handleFinalTuple(FinalTuple ft) {
+        try {
+            hdfs.appendTuple(hydfsDestFileName, ft.getLine() + "\n");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void handleTaskLog(TaskLogMessage m) {
+        String path = "/append_log/rainstorm_task_" + m.getTaskId() + ".log";
+        try {
+            hdfs.appendTuple(path, m.getLogLine() + "\n");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void handleLoadState(LoadStateRequest req, ObjectOutputStream out) {
+        int taskId = req.getTaskId();
+        String path = "/append_log/rainstorm_task_" + taskId + ".log";
+
+        List<String> processed = new ArrayList<>();
+        try {
+            String localTmp = "task_" + taskId + "_restore.txt";
+            boolean ok = hdfs.getHyDFSFileToLocalFileFromOwner(path, localTmp);
+
+            if (ok) {
+                List<String> lines = Files.readAllLines(Paths.get("output/" + localTmp));
+                for (String line : lines) {
+                    if (line.startsWith("INPUT ")) {
+                        processed.add(line.split(" ")[1]);
+                    }
+                }
+            }
+            out.writeObject(new LoadStateResponse(processed));
+            out.flush();
+            System.out.println("Leader: sent " + processed.size() + " processed tuples for task " + taskId);
+        } catch (Exception e) {
+            e.printStackTrace();
+            try {
+                out.writeObject(new LoadStateResponse(Collections.emptyList()));
+                out.flush();
+            } catch (IOException ignored) {}
+        }
     }
 
     /* Getter method to return an immutable copy of the tasks map */
