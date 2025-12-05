@@ -102,7 +102,7 @@ public class RainStormLeader {
                 TaskInfo ti = new TaskInfo(id,stage,i,vm);
                 tasks.put(id, ti);
                 LeaderLoggerHelper.taskStart(stage,id,vm);
-                String logPath = "/append_log/rainstorm_task_" + id + ".log";
+                String logPath = "append_log/rainstorm_task_" + id + ".log";
                 try {
                     hdfs.sendCreateEmptyFileToOwner(logPath);
                     System.out.println("[Leader] Created log file for task " + id + ": " + logPath);
