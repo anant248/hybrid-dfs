@@ -158,16 +158,16 @@ public class WorkerTask {
         operatorProc = pb.start();
 
         // combine python process output
-        // new Thread(() -> {
-        //     try (BufferedReader br = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()))) {
-        //         String line;
-        //         while ((line = br.readLine()) != null) {
-        //             System.out.println("[PYTHON OUTPUT] " + line);
-        //         }
-        //     } catch (Exception e) {
-        //         e.printStackTrace();
-        //     }
-        // }).start();
+        new Thread(() -> {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    System.out.println("[PYTHON OUTPUT] " + line);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
 
         opStdin = new BufferedWriter(new OutputStreamWriter(operatorProc.getOutputStream()));
         opStdout = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()));

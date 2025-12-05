@@ -137,5 +137,7 @@ java src/main/java/client/DistributedLogQuerierClient.java "grep options" "query
 
 rainstorm 1 1 identity "" dataset1.csv output.txt true false 100 100 100
 
+rainstorm 2 2 identity "" filter "STONEOAK" dataset1.csv output.txt true false 100 100 100
+
 rainstorm 2 3 identity "" identity "" dataset1.csv output.txt true false 100 100 100
 
