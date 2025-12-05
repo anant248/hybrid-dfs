@@ -94,6 +94,14 @@ public class HyDFS {
            List<NodeId> fileReplicas = ring.getReplicas(fileName);
            NodeId owner = fileReplicas.get(0);
            File file = new File("hdfs/" + fileName);
+
+           //TEST THIS FIX FOR APPEND
+            File parentDir = file.getParentFile();
+            if (!parentDir.exists()) {
+                parentDir.mkdirs();
+            }
+
+
            try (FileOutputStream fos = new FileOutputStream(file)) {
                fos.write(req.getFileData());
            } catch (IOException e) {

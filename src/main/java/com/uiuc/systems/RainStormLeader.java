@@ -234,6 +234,8 @@ public class RainStormLeader {
 
     private void launchSingleWorkerTask(TaskInfo t, String operatorType, List<String> operatorArgs) {
         boolean isFinal = (t.stageIdx == numStages - 1);
+        System.out.println("[LEADER launchSingleWorkerTask] STAGE IDX: "+ t.stageIdx);
+        System.out.println("[LEADER launchSingleWorkerTask] numStages: "+ numStages);
         StartWorkerTaskRequest req = new StartWorkerTaskRequest(leaderHost, LEADER_PORT, t.globalTaskId, t.stageIdx, operatorType, isFinal, operatorArgs, hydfsDestFileName);
 
         System.out.println("Launching WorkerTask " + t.globalTaskId + " on host " + t.host + " for stage " + t.stageIdx + " with operator " + operatorType);
