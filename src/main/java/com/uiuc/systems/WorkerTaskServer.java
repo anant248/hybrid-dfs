@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class WorkerTaskServer implements Runnable{
@@ -75,6 +77,7 @@ public class WorkerTaskServer implements Runnable{
                 // serialize ring object to JSON string
                 Ring ring = ((StartWorkerTaskRequest) obj).getRing();
                 ObjectMapper mapper = new ObjectMapper();
+                mapper.setVisibility(PropertyAccessor.FIELD, Visibility.ANY);
                 String ringJson = mapper.writeValueAsString(ring);
 
                 cmd.add(ringJson);

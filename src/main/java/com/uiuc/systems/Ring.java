@@ -101,4 +101,12 @@ public class Ring implements Serializable{
     public static int getNumReplicas() {
         return NUM_REPLICAS;
     }
+
+    public TreeMap<BigInteger, NodeId> getRing() {
+        return ring;
+    }
+
+    public void setRing(TreeMap<BigInteger, NodeId> ring) {
+        this.ring = ring;
+    }
 }
