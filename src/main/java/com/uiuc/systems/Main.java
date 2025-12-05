@@ -470,13 +470,25 @@ public class Main {
             }
             else if (lowerLine.startsWith("kill_task")) {
                 String[] parts = line.split("\\s+");
-                if (parts.length != 3) {
-                    System.out.println("Usage: kill_task <VM> <PID>");
+                if (parts.length != 4) {
+                    System.out.println("Usage: kill_task <VM> <Task ID> <PID>");
                 } else {
                     String vm = parts[1];
-                    String pid = parts[2];
-                    System.out.println("Attempting to kill task on VM " + vm + " with PID " + pid);
-                    // TODO: Implement kill task logic
+                    int taskId = Integer.parseInt(parts[2]);
+                    int pid = Integer.parseInt(parts[3]);
+                    try {
+
+                        new Thread(() -> {
+                            try {
+                                currentRainStormLeader.killTask(vm, taskId, pid);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }).start();
+
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
             } else {
                 System.out.println("Unknown command: " + line);

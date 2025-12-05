@@ -266,6 +266,39 @@ public class RainStormLeader {
         return new ArrayList<>(Arrays.asList(argsSplit));
     }
 
+    // method invoked by Leader to send kill request to WorkerTaskServer on the worker VM
+    public void killTask(String vmIp, int taskId, int pid) {
+        boolean killSuccess = false;
+
+        // send kill request to WorkerTaskServer on vmIp
+        try (Socket socket = new Socket(vmIp, WORKER_PORT);
+             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
+        ) {
+            out.writeObject(new KillWorkerTask(taskId));
+            out.flush();
+            WorkerTaskKillAckRequest ack = (WorkerTaskKillAckRequest) in.readObject();
+            killSuccess = ack.isKilled();
+
+            System.out.println("Kill request sent for Task " + taskId + " at PID " + pid + " on " + vmIp);
+        } catch (Exception e) {
+            System.out.println("Failed to send kill request: " + e.getMessage());
+        }
+
+        // check if kill was successful
+        if (!killSuccess) {
+            System.err.println("Leader: Kill NOT confirmed for task " + taskId + ". Aborting kill -9 command");
+            return;
+        }
+
+        // create WorkerTaskFailRequest that workerTaskFailureHandler can use
+        // note: currentTaskId is not used in handler so we dont care who detected the failure
+        WorkerTaskFailRequest req = new WorkerTaskFailRequest(0, taskId);
+
+        // begin process of restarting a new task to replace the killed task
+        workerTaskFailureHandler(req);
+    }
+
     private void restartFailedTask(int failedTaskId) {
         TaskInfo old = tasks.get(failedTaskId);
         if (old == null) {
