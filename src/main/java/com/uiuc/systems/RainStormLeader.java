@@ -164,7 +164,7 @@ public class RainStormLeader {
 
                     // Print if we are sending the tuple
                     System.out.println("SourceProcess: sending tuple of id" + tid + " to Task " + stage0List.get(target).globalTaskId);
-                    System.out.println(js.toString() + "\n");
+                    // System.out.println(js.toString() + "\n");
 
                     w.write(js.toString() + "\n");
                     w.flush();

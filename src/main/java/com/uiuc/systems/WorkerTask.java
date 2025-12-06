@@ -214,12 +214,12 @@ public class WorkerTask {
             System.out.println("Task " + taskId + ": starting stdout reader loop");
 
             while ((line = opStdout.readLine()) != null) {
-                System.out.println("Inside while loop of stdoutReaderLoop of task " + taskId);
-                System.out.println("Reading line: " + line);
+                // System.out.println("Inside while loop of stdoutReaderLoop of task " + taskId);
+                // System.out.println("Reading line: " + line);
 
                 // if final task, write to HyDFS (stubbed here)
                 if (isFinal) {
-                    System.out.println(line);
+                    // System.out.println(line);
                     
                     // write out to final output file in HyDFS 
                     hdfs.appendTuple(OUTPUT_FILE, line + "\n");
@@ -367,7 +367,7 @@ public class WorkerTask {
 
                 // add to seen set and log
                 seenInputTuples.add(tupleId);
-                appendToTaskLog("INPUT " + tupleId);
+                // appendToTaskLog("INPUT " + tupleId);
                 // forward to operator stdin
                 opStdin.write(line + "\n");
                 opStdin.flush();
