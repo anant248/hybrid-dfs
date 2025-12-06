@@ -137,7 +137,7 @@ public class RainStormLeader {
                     Socket s = new Socket(t.host, 9000 + t.globalTaskId);
                     sockets.add(s);
                     writers.add(new BufferedWriter(new OutputStreamWriter(s.getOutputStream())));
-                    
+
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -222,7 +222,7 @@ public class RainStormLeader {
         for (int i = 0; i < numStages; i++) {
             // get operator type and args for this task we are starting based on its stage and the initial operatorsAndArgs list
             String operatorType = getStageOperator(i);
-            List<String> operatorArgs = getStageOperatorArgs(i);
+            String operatorArgs = getStageOperatorArgs(i);
 
             for (int j = 0; j < numTasks; j++) {
                 TaskInfo t = tasks.get(i * numTasks + j); // get the task based on stage and index within stage
@@ -231,7 +231,7 @@ public class RainStormLeader {
         }
     }
 
-    private void launchSingleWorkerTask(TaskInfo t, String operatorType, List<String> operatorArgs) {
+    private void launchSingleWorkerTask(TaskInfo t, String operatorType, String operatorArgs) {
         boolean isFinal = (t.stageIdx == numStages - 1);
         StartWorkerTaskRequest req = new StartWorkerTaskRequest(leaderHost, LEADER_PORT, t.globalTaskId, t.stageIdx, operatorType, isFinal, operatorArgs, hydfsDestFileName, ring, t.host);
 
@@ -265,13 +265,12 @@ public class RainStormLeader {
     }
 
     // given a stage number return the operator args for that stage
-    public List<String> getStageOperatorArgs(int stageIdx) {
+    public String getStageOperatorArgs(int stageIdx) {
         int index = stageIdx * 2 + 1; // the index after the operator type has the args for that operator
         if (index >= operatorsAndArgs.size()) {
             return null;
         }
-        String[] argsSplit = operatorsAndArgs.get(index).split(" ");
-        return new ArrayList<>(Arrays.asList(argsSplit));
+        return operatorsAndArgs.get(index);
     }
     
     // method invoked by Leader to send kill request to WorkerTaskServer on the worker VM
@@ -332,7 +331,7 @@ public class RainStormLeader {
 
         // get operator type and args for this task we are starting based on its stage and the initial operatorsAndArgs list
         String operatorType = getStageOperator(updated.stageIdx);
-        List<String> operatorArgs = getStageOperatorArgs(updated.stageIdx);
+        String operatorArgs = getStageOperatorArgs(updated.stageIdx);
 
         launchSingleWorkerTask(updated, operatorType, operatorArgs); // launch the single worker task with the correct operator type and args on the new host
         LeaderLoggerHelper.taskRestart(updated.stageIdx, updated.globalTaskId, newHost);
@@ -426,7 +425,7 @@ public class RainStormLeader {
 
         // get operator type and args for this task we are starting based on its stage and the initial operatorsAndArgs list
         String operatorType = getStageOperator(stage);
-        List<String> operatorArgs = getStageOperatorArgs(stage);
+        String operatorArgs = getStageOperatorArgs(stage);
 
         launchSingleWorkerTask(ti, operatorType, operatorArgs);
     }

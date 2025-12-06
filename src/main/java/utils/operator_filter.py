@@ -9,7 +9,7 @@ if len(sys.argv) < 2:
 GREP_PATTERN = sys.argv[1]
 
 def should_keep(line):
-    return GREP_PATTERN.lower() in line.lower()
+    return GREP_PATTERN in line # case sensitive substring match
 
 for line in sys.stdin:
     try:

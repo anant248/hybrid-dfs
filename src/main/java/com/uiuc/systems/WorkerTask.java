@@ -20,7 +20,7 @@ public class WorkerTask {
     private final int leaderPort;
     private final int taskId;
     private final String operator;
-    private final List<String> operatorArgs;
+    private final String operatorArgs;
     private final List<DownstreamTarget> downstream = new ArrayList<>();
     private final boolean isFinal;
     private final String OUTPUT_FILE;
@@ -60,7 +60,7 @@ public class WorkerTask {
 
     private static final int MAX_RETRIES = 3;
 
-    public WorkerTask(String leaderIp, int leaderPort, int taskId, String operator, boolean isFinal, List<String> operatorArgs, List<DownstreamTarget> downstream,int stageIdx, String outputFile, Ring ring, String currentIp) {
+    public WorkerTask(String leaderIp, int leaderPort, int taskId, String operator, boolean isFinal, String operatorArgs, List<DownstreamTarget> downstream,int stageIdx, String outputFile, Ring ring, String currentIp) {
         this.leaderIp = leaderIp;
         this.leaderPort = leaderPort;
         this.taskId = taskId;
@@ -108,12 +108,7 @@ public class WorkerTask {
         String outputFile = args[6];
         String ringJson = args[7];
         String workerHost = args[8];
-
-        // All args after operator type are operator arguments
-        List<String> operatorArgs = new ArrayList<>();
-        for (int i = 9; i < args.length; i++) {
-            operatorArgs.add(args[i]);
-        }
+        String operatorArgs = args[9];
 
         System.out.println("Worker Task Main Args Parsed: leaderIp=" + leaderIp + ", leaderPort=" + leaderPort + ", taskId=" + taskId + ", stageIdx=" + stageIdx + ", operatorType=" + operatorType + ", isFinal=" + isFinal + ", outputFile=" + outputFile + ", workerHost=" + workerHost + ", operatorArgs=" + operatorArgs + ", ringJson=" + ringJson);
 
@@ -169,7 +164,7 @@ public class WorkerTask {
                 System.exit(1);
         }
 
-        cmd.addAll(operatorArgs);
+        cmd.add(operatorArgs);
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
         // pb.redirectErrorStream(true);
@@ -225,7 +220,7 @@ public class WorkerTask {
                     // System.out.println(line);
                     
                     // write out to final output file in HyDFS 
-                    written = hdfs.appendTuple(OUTPUT_FILE, line + "\n");
+                    written = hdfs.appendTuple(OUTPUT_FILE, line);
 
                     if (!written) {
                         logger.error("Task {} failed to append output tuple {} to output file {}", taskId, line, OUTPUT_FILE);

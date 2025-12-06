@@ -1,6 +1,8 @@
 package com.uiuc.systems;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -404,34 +406,41 @@ public class Main {
             else if (lowerLine.startsWith("rainstorm")) {
                 System.out.println("RainStorm leader invocation received.");
 
-                String[] parts = line.split("\\s+");
-                if (parts.length < 9) {
+                // String[] parts = line.split("\\s+");
+
+                List<String> parts = new ArrayList<>();
+                Matcher m = Pattern.compile("([^\"]\\S*|\".+?\")\\s*").matcher(line);
+                while (m.find()) {
+                    parts.add(m.group(1).replace("\"", "")); // strip quotes
+                }
+
+                if (parts.size() < 9) {
                     System.out.println("Usage: RainStorm <Nstages> <Ntasks_per_stage> <op1_exe> <op1_args> … <opNstages_exe> <opNstages_args> <hydfs_src_directory> <hydfs_dest_filename> <exactly_once> <autoscale_enabled> <INPUT_RATE> <LW> <HW>");
                     continue;
                 }
 
                 try {
                     int idx = 1;
-                    int Nstages = Integer.parseInt(parts[idx++]);
-                    int NtasksPerStage = Integer.parseInt(parts[idx++]);
+                    int Nstages = Integer.parseInt(parts.get(idx++));
+                    int NtasksPerStage = Integer.parseInt(parts.get(idx++));
 
                     List<String> operatorsAndArgs = new ArrayList<>();
                     for (int s = 0; s < Nstages; s++) {
-                        if (idx + 1 >= parts.length) {
+                        if (idx + 1 >= parts.size()) {
                             System.out.println("Error: insufficient operator/args entries.");
                             continue;
                         }
-                        operatorsAndArgs.add(parts[idx++]); 
-                        operatorsAndArgs.add(parts[idx++]); 
+                        operatorsAndArgs.add(parts.get(idx++)); 
+                        operatorsAndArgs.add(parts.get(idx++)); 
                     }
 
-                    String hydfsSrc = parts[idx++];
-                    String hydfsDest = parts[idx++];
-                    boolean exactlyOnce = Boolean.parseBoolean(parts[idx++]);
-                    boolean autoscale = Boolean.parseBoolean(parts[idx++]);
-                    int inputRate = Integer.parseInt(parts[idx++]);
-                    int lw = Integer.parseInt(parts[idx++]);
-                    int hw = Integer.parseInt(parts[idx++]);
+                    String hydfsSrc = parts.get(idx++);
+                    String hydfsDest = parts.get(idx++);
+                    boolean exactlyOnce = Boolean.parseBoolean(parts.get(idx++));
+                    boolean autoscale = Boolean.parseBoolean(parts.get(idx++));
+                    int inputRate = Integer.parseInt(parts.get(idx++));
+                    int lw = Integer.parseInt(parts.get(idx++));
+                    int hw = Integer.parseInt(parts.get(idx++));
 
                     RainStormLeader rainStormLeader = new RainStormLeader(
                         selfNode.getIp(),

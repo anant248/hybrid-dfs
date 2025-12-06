@@ -1,7 +1,6 @@
 package com.uiuc.systems;
 
 import java.io.Serializable;
-import java.util.List;
 
 public class StartWorkerTaskRequest implements Serializable {
     private int taskId;
@@ -9,7 +8,7 @@ public class StartWorkerTaskRequest implements Serializable {
     private int stageIdx;
     private String operator;
     private boolean isFinal;
-    private List<String> operatorArgs;
+    private String operatorArgs;
     private String outputFileName;
     private String workerHost;
     private Ring ring;
@@ -18,7 +17,7 @@ public class StartWorkerTaskRequest implements Serializable {
 
     private int leaderPort;
 
-    public StartWorkerTaskRequest(String leaderIp, int leaderPort, int taskId, int stageIdx, String operator, boolean isFinal, List<String> operatorArgs, String outputFileName, Ring ring, String workerHost) {
+    public StartWorkerTaskRequest(String leaderIp, int leaderPort, int taskId, int stageIdx, String operator, boolean isFinal, String operatorArgs, String outputFileName, Ring ring, String workerHost) {
         this.leaderIp = leaderIp;
         this.leaderPort = leaderPort;
         this.taskId = taskId;
@@ -95,11 +94,11 @@ public class StartWorkerTaskRequest implements Serializable {
         this.workerHost = workerHost;
     }
 
-    public List<String> getOperatorArgs() {
+    public String getOperatorArgs() {
         return operatorArgs;
     }
 
-    public void setOperatorArgs(List<String> operatorArgs) {
+    public void setOperatorArgs(String operatorArgs) {
         this.operatorArgs = operatorArgs;
     }
 

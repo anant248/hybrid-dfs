@@ -82,7 +82,7 @@ public class WorkerTaskServer implements Runnable{
 
                 cmd.add(ringJson);
                 cmd.add(((StartWorkerTaskRequest) obj).getWorkerHost());
-                cmd.addAll(((StartWorkerTaskRequest) obj).getOperatorArgs());
+                cmd.add(((StartWorkerTaskRequest) obj).getOperatorArgs());
 
                 System.out.println("Starting WorkerTask with command: " + String.join(" ", cmd));
 
