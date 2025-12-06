@@ -134,8 +134,6 @@ public class WorkerTask {
         Thread.sleep(500); // wait for python operator to be ready
 
         // Start stdout reader thread
-        // new Thread(this::stdoutReaderLoop).start();
-
         Thread stdoutThread = new Thread(this::stdoutReaderLoop, "stdout-reader-" + taskId);
         stdoutThread.setDaemon(false);  // Important: don't make it daemon
         stdoutThread.start();
@@ -167,7 +165,6 @@ public class WorkerTask {
         cmd.add(operatorArgs);
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
-        // pb.redirectErrorStream(true);
 
         operatorProc = pb.start();
 
@@ -182,18 +179,6 @@ public class WorkerTask {
                 logger.debug("Task {} stderr reader closed", taskId);
             }
         }, "stderr-consumer-" + taskId).start();
-
-        // combine python process output
-        // new Thread(() -> {
-        //     try (BufferedReader br = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()))) {
-        //         String line;
-        //         while ((line = br.readLine()) != null) {
-        //             System.out.println("[PYTHON OUTPUT] " + line);
-        //         }
-        //     } catch (Exception e) {
-        //         e.printStackTrace();
-        //     }
-        // }).start();
 
         opStdin = new BufferedWriter(new OutputStreamWriter(operatorProc.getOutputStream()));
         opStdout = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()));
@@ -212,15 +197,22 @@ public class WorkerTask {
             System.out.println("Task " + taskId + ": starting stdout reader loop");
 
             while ((line = opStdout.readLine()) != null) {
-                // System.out.println("Inside while loop of stdoutReaderLoop of task " + taskId);
-                // System.out.println("Reading line: " + line);
 
                 // if final task, write to HyDFS (stubbed here)
                 if (isFinal) {
-                    // System.out.println(line);
-                    // extract just csv line from JSON since this is the final stage and we want to append just the line
+                    // if final stage is not aggregate, we just get the line directly
+                    // otherwise print the agg_key and count from the js line object instead
                     JsonNode js = mapper.readTree(line);
-                    String csvData = js.get("line").asText();
+                    String csvData;
+                    
+                    if (operator.equalsIgnoreCase("aggregate")) {
+                        String key = js.get("agg_key").asText();
+                        String count = js.get("count").asText();
+                        csvData = "Key: " + key + " | Count: " + count;
+                    } else {
+                        // extract just csv line from JSON since this is the final stage and we want to append just the line
+                        csvData = js.get("line").asText();
+                    }
                     
                     // write out to final output file in HyDFS 
                     written = hdfs.appendTuple(OUTPUT_FILE, csvData + "\n");
@@ -228,9 +220,6 @@ public class WorkerTask {
                     if (!written) {
                         logger.error("Task {} failed to append output tuple {} to output file {}", taskId, line, OUTPUT_FILE);
                     }
-                    
-                    // for now just write to a local file in hdfs/output.txt using FileOutputStream
-                    // fos.write((line + "\n").getBytes());
 
                 } 
                 // else, forward to downstream tasks
