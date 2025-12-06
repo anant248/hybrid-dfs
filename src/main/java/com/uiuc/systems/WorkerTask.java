@@ -203,7 +203,7 @@ public class WorkerTask {
     }
 
     private void stdoutReaderLoop() {
-        try {
+        try (FileOutputStream fos = new FileOutputStream("hdfs/" + OUTPUT_FILE, true)) {
             String line;
 
             if (opStdout == null) { 
@@ -222,7 +222,11 @@ public class WorkerTask {
                     // System.out.println(line);
                     
                     // write out to final output file in HyDFS 
-                    hdfs.appendTuple(OUTPUT_FILE, line + "\n");
+                    // hdfs.appendTuple(OUTPUT_FILE, line + "\n");
+                    
+                    // for now just write to a local file in hdfs/output.txt using FileOutputStream
+                    fos.write((line + "\n").getBytes());
+
                 } 
                 // else, forward to downstream tasks
                 else {
