@@ -79,9 +79,11 @@ public class WorkerTask {
         // if rebuildState was false, create an empty log file in HyDFS, otherwise the appends will fail
         // if rebuildState was true, the log file already exists
         if (!rebuildStateFromLog()) {
-            try {
-                hdfs.sendCreateEmptyFileToOwner(taskLogPath);
+            // create an empty log file in HyDFS of this VM
+            try (FileOutputStream fos = new FileOutputStream("hdfs/" + taskLogPath)){               
+                fos.write(0);
                 System.out.println("Task " + taskId + ": created new HyDFS log file " + taskLogPath);
+                
             } catch (Exception e) {
                 logger.error("Task {}: failed to create HyDFS log file {}", taskId, taskLogPath, e);
             }
@@ -203,8 +205,9 @@ public class WorkerTask {
     }
 
     private void stdoutReaderLoop() {
-        try (FileOutputStream fos = new FileOutputStream("hdfs/" + OUTPUT_FILE, true)) {
+        try {
             String line;
+            boolean written;
 
             if (opStdout == null) { 
                 System.err.println("Task " + taskId + ": opStdout is null!");
@@ -222,10 +225,14 @@ public class WorkerTask {
                     // System.out.println(line);
                     
                     // write out to final output file in HyDFS 
-                    // hdfs.appendTuple(OUTPUT_FILE, line + "\n");
+                    written = hdfs.appendTuple(OUTPUT_FILE, line + "\n");
+
+                    if (!written) {
+                        logger.error("Task {} failed to append output tuple {} to output file {}", taskId, line, OUTPUT_FILE);
+                    }
                     
                     // for now just write to a local file in hdfs/output.txt using FileOutputStream
-                    fos.write((line + "\n").getBytes());
+                    // fos.write((line + "\n").getBytes());
 
                 } 
                 // else, forward to downstream tasks
@@ -348,7 +355,8 @@ public class WorkerTask {
     }
 
     private void handleClient(Socket client) {
-        try (BufferedReader r = new BufferedReader(new InputStreamReader(client.getInputStream()))) {
+        try (BufferedReader r = new BufferedReader(new InputStreamReader(client.getInputStream()));
+             FileOutputStream fos = new FileOutputStream("hdfs/" + taskLogPath, true)) {
             String line;
             while ((line = r.readLine()) != null) {
                 tuplesCount.incrementAndGet();
@@ -369,8 +377,10 @@ public class WorkerTask {
                 // System.out.println("Task " + taskId + ": received tuple " + tupleId + " from upstream task " + upstreamTask);
                 // System.out.println(line + "\n");
 
-                // add to seen set and log
+                // add to seen set and write to the log
                 seenInputTuples.add(tupleId);
+                fos.write(("INPUT " + tupleId + "\n").getBytes());
+
                 // appendToTaskLog("INPUT " + tupleId);
                 // forward to operator stdin
                 opStdin.write(line + "\n");

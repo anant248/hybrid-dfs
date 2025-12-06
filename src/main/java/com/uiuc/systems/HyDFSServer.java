@@ -63,6 +63,10 @@ public class HyDFSServer implements Runnable{
                     hdfs.handleReplicaCreateRequest((CreateRequest) obj, socket,out);
                 }
             }
+            // OUTPUT TUPLE APPEND REQUEST
+            else if(obj instanceof OutputTupleAppendRequest){
+                hdfs.outputTupleAppendHandler((OutputTupleAppendRequest) obj,socket,out);
+            }
             // APPEND REQUEST
             else if(obj instanceof AppendRequest){
                 NodeId currentNode = hdfs.getCurrentNode();

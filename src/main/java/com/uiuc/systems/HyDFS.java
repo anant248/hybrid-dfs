@@ -334,14 +334,15 @@ public class HyDFS {
      * instead of reading from a local file. Used by MP4 worker final stage.
      */
     private boolean sendAppendTupleRequestToOwner(String hdfsFileName, String tuple) {
-        List<NodeId> hdfsFileReplicas = verifyExistingReplicas(ring.getReplicas(hdfsFileName), hdfsFileName);
+        // List<NodeId> hdfsFileReplicas = verifyExistingReplicas(ring.getReplicas(hdfsFileName), hdfsFileName);
 
-        if (hdfsFileReplicas.size() == 0) {
-            return false;
-        }
+        // if (hdfsFileReplicas.size() == 0) {
+        //     return false;
+        // }
 
-        NodeId owner = hdfsFileReplicas.get(0);
-        String ownerIp = owner.getIp();
+        // NodeId owner = hdfsFileReplicas.get(0);
+        // String ownerIp = owner.getIp();
+        String ownerIp = "fa25-cs425-7601.cs.illinois.edu";
 
         try (Socket socket = new Socket(ownerIp, PORT)) {
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
@@ -350,7 +351,7 @@ public class HyDFS {
             // Convert tuple to bytes
             byte[] tupleData = (tuple + "\n").getBytes(StandardCharsets.UTF_8);
 
-            AppendRequest ownerAppendRequest = new AppendRequest(tupleData, hdfsFileName);
+            OutputTupleAppendRequest ownerAppendRequest = new OutputTupleAppendRequest(tupleData, hdfsFileName);
 
             out.writeObject(ownerAppendRequest);
             out.flush();
@@ -571,6 +572,34 @@ public class HyDFS {
         } catch (IOException e) {
             sendResponseToClient(client, "NACK",out);
             e.printStackTrace();
+        }
+    }
+
+    /**
+     * Handles append request specifically for tuples meant to go to the output file
+     * Will only be used at VM1 since the OutputTupleAppendRequest is only sent to VM1 node
+     * @param req
+     * @param client
+     * @param out
+     */
+    public void outputTupleAppendHandler(OutputTupleAppendRequest req, Socket client, ObjectOutputStream out) {
+        String fileName = req.getFileName();
+
+        try {
+            File file = new File("hdfs/"+fileName);
+
+            try (FileOutputStream fos = new FileOutputStream(file, true)) {
+                fos.write(req.getData());
+                sendResponseToClient(client, "ACK",out);
+                
+            } catch(IOException e){
+                e.printStackTrace();
+                sendResponseToClient(client, "NACK",out);
+                return;
+            }
+        } catch(Exception e){
+            e.printStackTrace();
+            sendResponseToClient(client, "NACK",out);
         }
     }
 

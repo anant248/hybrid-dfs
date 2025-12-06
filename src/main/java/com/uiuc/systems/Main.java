@@ -543,7 +543,7 @@ public class Main {
             String host = ti.host;
             int stageIdx = ti.stageIdx;
             String opExe = currentRainStormLeader.getStageOperator(stageIdx);
-            String logFile = "/append_log/rainstorm_task_" + taskId + ".log";
+            String logFile = "hdfs/rainstorm_task_" + taskId + ".log";
 
             long pid = -1L;
             // RPC to worker's WorkerTaskServer to request PID for taskId

@@ -73,9 +73,11 @@ public class RainStormLeader {
         LeaderLoggerHelper.runStart();
         System.out.println("RainStorm Leader starting on host " + leaderHost);
 
-        // create the destination file in HyDFS
-        try {
-            hdfs.sendCreateEmptyFileToOwner(hydfsDestFileName);
+        // create an empty output file in HyDFS of this VM (Rainstorm leader VM -- always VM1)
+        try (FileOutputStream fos = new FileOutputStream("hdfs/" + hydfsDestFileName)) {
+            fos.write(0);
+            System.out.println("Leader: created destination file " + hydfsDestFileName + " in HyDFS");
+
         } catch (Exception e) {
             logger.error("Leader: failed to create destination file {} in HyDFS", hydfsDestFileName, e);
         }
