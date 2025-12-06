@@ -24,6 +24,8 @@ public class WorkerTask {
     private final List<DownstreamTarget> downstream = new ArrayList<>();
     private final boolean isFinal;
     private final String OUTPUT_FILE;
+    private final String ROUTING_FILE;
+    private final File routingFile;
 
     private Process operatorProc;
     private BufferedWriter opStdin;
@@ -71,6 +73,8 @@ public class WorkerTask {
         this.stageIdx = stageIdx;
         this.OUTPUT_FILE = outputFile;
         this.taskLogPath = "rainstorm_task_" + taskId + ".log";
+        this.ROUTING_FILE = "routing/routing_" + taskId + ".conf";
+        this.routingFile = new File(ROUTING_FILE);
 
         // build out HyDFS for this worker task
         NodeId currentNode = new NodeId(currentIp, WORKER_TASK_PORT, System.currentTimeMillis());
@@ -247,6 +251,23 @@ public class WorkerTask {
 
             // add to pending tuples map to track for ACKs
             pendingTuples.put(tupleId, new PendingTuple(tupleId, newJson, retryCount));
+
+            // check if the routing file has changed in the past 10 seconds
+            // if so, reload downstream targets, otherwise use existing downstream list
+            if (this.routingFile.exists()) {
+                long lastModified = this.routingFile.lastModified();
+                long now = System.currentTimeMillis();
+
+                if (now - lastModified <= 10000) { // 10 seconds
+                    List<DownstreamTarget> newDownstream = RoutingLoader.load(taskId);
+                    if (!newDownstream.equals(this.downstream)) {
+                        this.downstream.clear();
+                        this.downstream.addAll(newDownstream);
+                        System.out.println("Task " + taskId + ": reloaded downstream targets from updated routing file.");
+                        logger.info("Task {} reloaded downstream targets from updated routing file", taskId);
+                    }
+                }
+            }
 
             // choose downstream target based on hash of tuple ID
             int idx = hash(tupleId).mod(BigInteger.valueOf(downstream.size())).intValue();
