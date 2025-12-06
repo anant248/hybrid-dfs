@@ -10,9 +10,8 @@ IDENTITY = True
 
 for line in sys.stdin:
     try:
-        tup = json.loads(line.strip())
         if IDENTITY:
-            sys.stdout.write(json.dumps(tup) + "\n")
+            sys.stdout.write(line + "\n")
             sys.stdout.flush()
     except:
         continue

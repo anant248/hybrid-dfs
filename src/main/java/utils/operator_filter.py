@@ -8,14 +8,13 @@ if len(sys.argv) < 2:
 
 GREP_PATTERN = sys.argv[1]
 
-def should_keep(t):
+def should_keep(line):
     return GREP_PATTERN.lower() in line.lower()
 
 for line in sys.stdin:
     try:
-        tup = json.loads(line.strip())
-        if should_keep(tup):
-            sys.stdout.write(json.dumps(tup) + "\n")
+        if should_keep(line):
+            sys.stdout.write(line + "\n")
             sys.stdout.flush()
     except:
         continue

@@ -17,10 +17,9 @@ def transform(t):
 
 for line in sys.stdin:
     try:
-        tup = json.loads(line.strip())
-        out = transform(tup)
+        out = transform(line)
         if out is not None:
-            sys.stdout.write(json.dumps(out) + "\n")
+            sys.stdout.write(out + "\n")
             sys.stdout.flush()
     except:
         continue

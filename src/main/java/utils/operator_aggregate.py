@@ -21,10 +21,8 @@ def update(key, value):
 
 for line in sys.stdin:
     try:
-        tup = json.loads(line.strip())
-
         # use CSV reader to correctly handle commas inside quotes
-        parts = next(csv.reader([tup]))
+        parts = next(csv.reader([line]))
 
         if COL_IDX < len(parts):
             key = parts[COL_IDX]
@@ -34,11 +32,10 @@ for line in sys.stdin:
         key = key if key != "" else ""
         agg_val = update(key, 1)
         
-        out = dict(tup)
-        out["agg_key"] = key
-        out["count"] = agg_val
+        # Output as CSV: key,count
+        out = f"{key},{agg_val}"
         
-        sys.stdout.write(json.dumps(out) + "\n")
+        sys.stdout.write(out + "\n")
         sys.stdout.flush()
 
     except:
