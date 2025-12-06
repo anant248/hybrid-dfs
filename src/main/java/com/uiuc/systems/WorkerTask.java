@@ -131,11 +131,16 @@ public class WorkerTask {
         startInputServer();
         startRetryThread();
 
-        // Start stdout reader thread
-        new Thread(this::stdoutReaderLoop).start();
-
         // launch operator subprocess after servers are up
         launchOperator();
+
+        Thread.sleep(500); // wait for python operator to be ready
+
+        // Start stdout reader thread
+        // new Thread(this::stdoutReaderLoop).start();
+
+        Thread stdoutThread = new Thread(this::stdoutReaderLoop, "stdout-reader-" + taskId);
+        stdoutThread.setDaemon(false);  // Important: don't make it daemon stdoutThread.start();
 
         System.out.println("WorkerTask " + taskId + " started operator " + operator);
         logger.info("Task {} launched operator {}", taskId, operator);
@@ -163,21 +168,21 @@ public class WorkerTask {
         cmd.addAll(operatorArgs);
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.redirectErrorStream(true);
+        // pb.redirectErrorStream(true);
 
         operatorProc = pb.start();
 
         // combine python process output
-        // new Thread(() -> {
-        //     try (BufferedReader br = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()))) {
-        //         String line;
-        //         while ((line = br.readLine()) != null) {
-        //             System.out.println("[PYTHON OUTPUT] " + line);
-        //         }
-        //     } catch (Exception e) {
-        //         e.printStackTrace();
-        //     }
-        // }).start();
+        new Thread(() -> {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    System.out.println("[PYTHON OUTPUT] " + line);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
 
         opStdin = new BufferedWriter(new OutputStreamWriter(operatorProc.getOutputStream()));
         opStdout = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()));
@@ -186,7 +191,18 @@ public class WorkerTask {
     private void stdoutReaderLoop() {
         try {
             String line;
+
+            if (opStdout == null) { 
+                System.err.println("Task " + taskId + ": opStdout is null!");
+                return;
+            }
+
+            System.out.println("Task " + taskId + ": starting stdout reader loop");
+
             while ((line = opStdout.readLine()) != null) {
+                System.out.println("Inside while loop of stdoutReaderLoop of task " + taskId);
+                System.out.println("Reading line: " + line);
+
                 // if final task, write to HyDFS (stubbed here)
                 if (isFinal) {
                     System.out.println(line);
@@ -350,6 +366,7 @@ public class WorkerTask {
         }
         catch (Exception e) {
             logger.error("Task {} handleClient error", taskId, e);
+            System.out.println("Task " + taskId + " handleClient error: " + e);
         }
     }
 
@@ -366,6 +383,7 @@ public class WorkerTask {
             }
         } catch (Exception e) {
             logger.error("Task {} failed to send ACK for {} to upstream {}", taskId, tupleId, upstreamTaskId, e);
+            System.out.println("Task " + taskId + " failed to send ACK for " + tupleId + " to upstream " + upstreamTaskId + ": " + e);
         }
     }
 
