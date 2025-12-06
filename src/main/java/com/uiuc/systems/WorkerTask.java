@@ -140,7 +140,8 @@ public class WorkerTask {
         // new Thread(this::stdoutReaderLoop).start();
 
         Thread stdoutThread = new Thread(this::stdoutReaderLoop, "stdout-reader-" + taskId);
-        stdoutThread.setDaemon(false);  // Important: don't make it daemon stdoutThread.start();
+        stdoutThread.setDaemon(false);  // Important: don't make it daemon
+        stdoutThread.start();
 
         System.out.println("WorkerTask " + taskId + " started operator " + operator);
         logger.info("Task {} launched operator {}", taskId, operator);
@@ -154,6 +155,7 @@ public class WorkerTask {
     private void launchOperator() throws IOException {
         List<String> cmd = new ArrayList<>();
         cmd.add("python3");
+        cmd.add("-u"); // unbuffered output
 
         switch (operator) {
             case "filter": cmd.add("/home/anantg2/mp4-g76/src/main/java/utils/operator_filter.py"); break;
@@ -172,17 +174,29 @@ public class WorkerTask {
 
         operatorProc = pb.start();
 
-        // combine python process output
         new Thread(() -> {
-            try (BufferedReader br = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()))) {
+            try (BufferedReader errReader = new BufferedReader(
+                new InputStreamReader(operatorProc.getErrorStream()))) {  // ← ErrorStream, not InputStream!
                 String line;
-                while ((line = br.readLine()) != null) {
-                    System.out.println("[PYTHON OUTPUT] " + line);
+                while ((line = errReader.readLine()) != null) {
+                    System.err.println("[Task-" + taskId + " STDERR] " + line);
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                logger.debug("Task {} stderr reader closed", taskId);
             }
-        }).start();
+        }, "stderr-consumer-" + taskId).start();
+
+        // combine python process output
+        // new Thread(() -> {
+        //     try (BufferedReader br = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()))) {
+        //         String line;
+        //         while ((line = br.readLine()) != null) {
+        //             System.out.println("[PYTHON OUTPUT] " + line);
+        //         }
+        //     } catch (Exception e) {
+        //         e.printStackTrace();
+        //     }
+        // }).start();
 
         opStdin = new BufferedWriter(new OutputStreamWriter(operatorProc.getOutputStream()));
         opStdout = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()));
@@ -348,8 +362,8 @@ public class WorkerTask {
                     continue;
                 }
 
-                System.out.println("Task " + taskId + ": received tuple " + tupleId + " from upstream task " + upstreamTask);
-                System.out.println(line + "\n");
+                // System.out.println("Task " + taskId + ": received tuple " + tupleId + " from upstream task " + upstreamTask);
+                // System.out.println(line + "\n");
 
                 // add to seen set and log
                 seenInputTuples.add(tupleId);
