@@ -8,15 +8,12 @@ if len(sys.argv) < 1:
     sys.exit(1)
 
 def transform(t):
-    line = t.get("line", "")
-
     # use CSV reader to correctly handle commas inside quotes
-    parts = next(csv.reader([line]))
+    parts = next(csv.reader([t]))
 
     trimmed = parts[:3]
-    new_t = dict(t)
-    new_t["line"] = ",".join(trimmed)
-    return new_t
+
+    return ",".join(trimmed)
 
 for line in sys.stdin:
     try:

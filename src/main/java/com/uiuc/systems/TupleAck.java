@@ -1,6 +1,8 @@
 package com.uiuc.systems;
 
-public class TupleAck {
+import java.io.Serializable;
+
+public class TupleAck implements Serializable{
     private String tupleId;
 
     public TupleAck(String tupleId) {

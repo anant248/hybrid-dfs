@@ -9,7 +9,6 @@ if len(sys.argv) < 2:
 GREP_PATTERN = sys.argv[1]
 
 def should_keep(t):
-    line = t.get("line", "")
     return GREP_PATTERN.lower() in line.lower()
 
 for line in sys.stdin:

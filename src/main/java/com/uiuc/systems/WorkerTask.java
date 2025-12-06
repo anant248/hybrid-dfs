@@ -83,7 +83,7 @@ public class WorkerTask {
             try (FileOutputStream fos = new FileOutputStream("hdfs/" + taskLogPath)){               
                 fos.write(0);
                 System.out.println("Task " + taskId + ": created new HyDFS log file " + taskLogPath);
-                
+
             } catch (Exception e) {
                 logger.error("Task {}: failed to create HyDFS log file {}", taskId, taskLogPath, e);
             }
@@ -362,6 +362,7 @@ public class WorkerTask {
                 tuplesCount.incrementAndGet();
                 JsonNode js = mapper.readTree(line);
                 String tupleId = js.get("id").asText();
+                String csvData = js.get("line").asText();
                 int upstreamTask = js.get("srcTask").asInt();
                 if (seenInputTuples.contains(tupleId)) {
                     logger.debug("Task {} dropping duplicate tuple {}", taskId, tupleId);
@@ -383,7 +384,7 @@ public class WorkerTask {
 
                 // appendToTaskLog("INPUT " + tupleId);
                 // forward to operator stdin
-                opStdin.write(line + "\n");
+                opStdin.write(csvData + "\n");
                 opStdin.flush();
 
                 // only send ack if upstreamTask is not -1 (source task)

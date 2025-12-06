@@ -137,8 +137,7 @@ public class RainStormLeader {
                     Socket s = new Socket(t.host, 9000 + t.globalTaskId);
                     sockets.add(s);
                     writers.add(new BufferedWriter(new OutputStreamWriter(s.getOutputStream())));
-
-                    System.out.println("These are the tasks to write to: " + writers);
+                    
                 } catch (Exception e) {
                     e.printStackTrace();
                 }

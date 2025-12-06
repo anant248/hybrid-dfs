@@ -22,10 +22,9 @@ def update(key, value):
 for line in sys.stdin:
     try:
         tup = json.loads(line.strip())
-        line = tup.get("line", "")
 
         # use CSV reader to correctly handle commas inside quotes
-        parts = next(csv.reader([line]))
+        parts = next(csv.reader([tup]))
 
         if COL_IDX < len(parts):
             key = parts[COL_IDX]
