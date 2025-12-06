@@ -9,9 +9,10 @@ if len(sys.argv) < 1:
 IDENTITY = True
 
 for line in sys.stdin:
+    tup = json.loads(line.strip())
     try:
         if IDENTITY:
-            sys.stdout.write(line + "\n")
+            sys.stdout.write(json.dumps(tup) + "\n")
             sys.stdout.flush()
     except:
         continue

@@ -8,13 +8,15 @@ if len(sys.argv) < 2:
 
 GREP_PATTERN = sys.argv[1]
 
-def should_keep(line):
+def should_keep(t):
+    line = t.get("line", "")
     return GREP_PATTERN in line # case sensitive substring match
 
 for line in sys.stdin:
     try:
-        if should_keep(line):
-            sys.stdout.write(line + "\n")
+        tup = json.loads(line.strip())
+        if should_keep(tup):
+            sys.stdout.write(json.dumps(tup) + "\n")
             sys.stdout.flush()
     except:
         continue

@@ -8,18 +8,22 @@ if len(sys.argv) < 1:
     sys.exit(1)
 
 def transform(t):
+    line = t.get("line", "")
     # use CSV reader to correctly handle commas inside quotes
-    parts = next(csv.reader([t]))
+    parts = next(csv.reader([line]))
 
     trimmed = parts[:3]
-
-    return ",".join(trimmed)
+    new_t = dict(t)
+    new_t["line"] = ",".join(trimmed)
+    return new_t
 
 for line in sys.stdin:
     try:
-        out = transform(line)
+        tup = json.loads(line.strip())
+        out = transform(tup)
+
         if out is not None:
-            sys.stdout.write(out + "\n")
+            sys.stdout.write(json.dumps(out) + "\n")
             sys.stdout.flush()
     except:
         continue

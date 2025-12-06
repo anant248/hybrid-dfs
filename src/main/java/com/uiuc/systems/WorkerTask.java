@@ -218,9 +218,12 @@ public class WorkerTask {
                 // if final task, write to HyDFS (stubbed here)
                 if (isFinal) {
                     // System.out.println(line);
+                    // extract just csv line from JSON since this is the final stage and we want to append just the line
+                    JsonNode js = mapper.readTree(line);
+                    String csvData = js.get("line").asText();
                     
                     // write out to final output file in HyDFS 
-                    written = hdfs.appendTuple(OUTPUT_FILE, line);
+                    written = hdfs.appendTuple(OUTPUT_FILE, csvData + "\n");
 
                     if (!written) {
                         logger.error("Task {} failed to append output tuple {} to output file {}", taskId, line, OUTPUT_FILE);
@@ -357,7 +360,6 @@ public class WorkerTask {
                 tuplesCount.incrementAndGet();
                 JsonNode js = mapper.readTree(line);
                 String tupleId = js.get("id").asText();
-                String csvData = js.get("line").asText();
                 int upstreamTask = js.get("srcTask").asInt();
                 if (seenInputTuples.contains(tupleId)) {
                     logger.debug("Task {} dropping duplicate tuple {}", taskId, tupleId);
@@ -379,7 +381,7 @@ public class WorkerTask {
 
                 // appendToTaskLog("INPUT " + tupleId);
                 // forward to operator stdin
-                opStdin.write(csvData + "\n");
+                opStdin.write(line + "\n");
                 opStdin.flush();
 
                 // only send ack if upstreamTask is not -1 (source task)
