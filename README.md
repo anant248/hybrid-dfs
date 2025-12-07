@@ -7,7 +7,7 @@ Developed by Anant Goyal (anantg2) and Abuzar Hussain Mohammad (ahm7)
 
 ## Description
 
-MP4-G76 is ... in progress
+MP4-G76 extends our MP3 HyDFS distributed file system with a distributed stream-processing engine called Rainstorm. The system supports multi-stage stream processing pipelines, fault tolerance through logging and replay, autoscaling, and integration with HyDFS for durable final outputs. Input data is streamed from HyDFS through Stage 0 tasks, processed through user-defined operators, and final outputs are appended to an output file stored on VM1.
 
 ## Installation
 
@@ -23,10 +23,15 @@ MP4-G76 is ... in progress
      mvn clean package
      ```
 3. **Prepare directories:**
-   - Create required directories for file storage:
-     ```bash
-     mkdir -p hdfs inputs output
-     ```
+      Each VM should contain:
+      ```bash
+      mkdir -p hdfs hydfs inputs output logs
+      ```
+   - `hdfs/` — task logs for worker recovery  
+   - `hydfs/` — replicated HyDFS storage  
+   - `inputs/` — your CSV datasets  
+   - `output/` — local temp output  
+   - `logs/` — node logs
 
 ## Usage
 
@@ -34,48 +39,75 @@ MP4-G76 is ... in progress
    - Run the main class for your node, specifying configuration as needed.
    - Example:
      ```bash
-     java -jar target/mp3-g76.jar --nodeId=<NODE_ID> --config=config.yaml
+     java -jar target/mp4-g76.jar --nodeId=<NODE_ID> --config=config.yaml
      ```
    - In case that doesnt work (replace XX with the current IP and introducer node IP respectively):
      ```bash
      mvn exec:java -Dexec.mainClass="com.uiuc.systems.Main" -Dexec.args="fa25-cs425-76XX.cs.illinois.edu fa25-cs425-76XX.cs.illinois.edu gossip nosuspect"
      ```
 
+   Once running, each node participates in:
+   - HyDFS membership & replication  
+   - Rainstorm leader/worker communication  
+   - Failure detection  
 
-2. **File operations:**
-   - Use the CLI or provided scripts to create, append, and retrieve files in the distributed system.
-   - Example commands:
-     - Create a file:
-       ```bash
-       java -jar target/mp3-g76.jar create <local_file> <hdfs_file>
-       ```
-     - Append to a file:
-       ```bash
-       java -jar target/mp3-g76.jar append <local_file> <hdfs_file>
-       ```
-     - Retrieve a file:
-       ```bash
-       java -jar target/mp3-g76.jar get <hdfs_file> <local_file>
-       ```
+   ---
+
+   ## Running the Rainstorm Stream Processor (on the Leader VM)
+
+   Rainstorm jobs are started **from VM1**, which automatically becomes the leader.
+
+   **Syntax:**
+   ```
+   rainstorm <Nstages> <Ntasks_per_stage> \
+   <op1_exe> <op1_arg> … <opN_exe> <opN_arg> \
+   <hydfs_src_directory> <hydfs_dest_filename> \
+   <exactly_once> <autoscale_enabled> \
+   <INPUT_RATE> <LW> <HW>
+   ```
+
+   - `op_exe` ∈ {identity, filter, transform, aggregate}
+   - `op_arg` = operator-specific argument (use quotes for multi‑word patterns)
+   - Output file is created on **VM1 under `/hydfs`**
+   - Each task writes its recovery log under **`/hdfs` on its own VM**
+
+   **Examples:**
+
+   ```
+   rainstorm 1 1 identity "i" dataset1.csv output.txt true false 100 100 100
+   ```
+
+   ```
+   rainstorm 1 1 filter STONEOAK dataset1.csv output.txt true false 100 100 100
+   ```
+
+   ```
+   rainstorm 2 1 filter "STONE" transform "t" dataset1.csv output.txt true false 100 100 100
+   ```
+
 
 ## Example Workflow
 
-1. **Start multiple nodes** on different machines or ports.
-2. **Create a file** in the distributed system:
-   ```bash
-   java -jar target/mp3-g76.jar create inputs/example.txt distributed_example.txt
+1. **Start all 10 VMs** using the Main command.
+2. **Place input data** (e.g., `dataset1.csv`) into:
    ```
-3. **Append data** to the file:
-   ```bash
-   java -jar target/mp3-g76.jar append inputs/append.txt distributed_example.txt
+   inputs/
    ```
-4. **Retrieve the file** from HyDFS:
+3. **Start a Rainstorm pipeline** on VM1:
    ```bash
-   java -jar target/mp3-g76.jar get distributed_example.txt output/local_copy.txt
+   rainstorm 2 1 filter "ERROR CODE" aggregate "3" dataset1.csv output.txt true false 200 100 300
    ```
-5. **Observe logs** to see membership protocol messages and replica synchronization.
+4. **Workers start automatically**, each receiving tasks for their assigned stage.
+5. **Final output** appears in:
+   ```
+   /hydfs/output.txt
+   ```
+6. **Task logs** (for replay after failure) appear on each VM under:
+   ```
+   /hdfs/rainstrom_task_<id>.log
+   ```
 
-## Testing
+## Testing (NOT APPLICABLE FOR MP4)
 
 1. **Unit tests:** Run with Maven:
    ```bash
@@ -86,8 +118,10 @@ MP4-G76 is ... in progress
 
 ## Roadmap
 
-- [ ] Read and understand MP4
+- [x] Read and understand MP4
+- [x] Implement MP4
+- [x] Demo MP4
 
 ## Project Status
 
-**In Progress** — MP4-G76 is under active development as part of the ECE 428 coursework. Bug reports and suggestions are welcome.
+**In Progress** — MP4-G76 is now complete as part of the ECE 428 coursework. Bug reports and suggestions are welcome.
