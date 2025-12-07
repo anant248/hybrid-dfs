@@ -352,13 +352,13 @@ public class WorkerTask {
         // otherwise proceed with retrying the send
         WorkerLoggerHelper.retryTupleSend(taskId, p);
 
-        // try forwarding the tuple again
-        forwardTuple(p.json, p.retryCount + 1);
-
         // we might not even need to update these here since forwardTuple creates a new PendingTuple entry
         // but we do it here to keep the retryCount accurate in case of failures
         p.lastSentTime = System.currentTimeMillis();
         p.retryCount++;
+
+        // try forwarding the tuple again
+        forwardTuple(p.json, p.retryCount);
     }
 
     private void handleClient(Socket client) {
@@ -435,36 +435,6 @@ public class WorkerTask {
         return 10000 + taskId;
     }
 
-//    private boolean rebuildStateFromLog() {
-//        try {
-//            String hdfsName = taskLogPath;
-//
-//            // download log file from HyDFS to local
-//            String localName = "task_" + taskId + "_log_local.txt";
-//
-//            boolean ok = hdfs.getHyDFSFileToLocalFileFromOwner(hdfsName, localName);
-//            if (!ok) {
-//                logger.info("No prior log found for task {}", taskId);
-//                return false;
-//            }
-//            List<String> lines = Files.readAllLines(Paths.get("output/" + localName));
-//            for (String line : lines) {
-//                if (line.startsWith("INPUT ")) {
-//                    String tupleId = line.split(" ")[1];
-//                    seenInputTuples.add(tupleId);
-//                }
-//            }
-//            logger.info("Task {} rebuilt state: {} tuples", taskId, seenInputTuples.size());
-//
-//            return true;
-//
-//        } catch (Exception e) {
-//            logger.error("Task {} failed to rebuild state", taskId, e);
-//            return false;
-//        }
-//    }
-
-
     private boolean rebuildStateFromLog() {
         try {
             File restore = new File("hdfs/" + taskLogPath);
@@ -473,39 +443,20 @@ public class WorkerTask {
                 System.out.println("Task " + taskId + ": no restore log found.");
                 return false;
             }
-
             List<String> lines = Files.readAllLines(restore.toPath());
-
-            // Track both INPUT and ACKED
             Set<String> seen = new HashSet<>();
-            Set<String> acked = new HashSet<>();
 
             for (String line : lines) {
                 line = line.trim();
-
                 if (line.startsWith("INPUT ")) {
                     String tupleId = line.split(" ")[1].trim();
                     seen.add(tupleId);
                 }
-                else if (line.startsWith("ACKED ")) {
-                    String tupleId = line.split(" ")[1].trim();
-                    acked.add(tupleId);
-                }
             }
-
             seenInputTuples.addAll(seen);
 
-            if (!isFinal) {
-                for (String tupleId : seen) {
-                    if (!acked.contains(tupleId)) {
-                        pendingTuples.put(tupleId, new PendingTuple(tupleId, null, 0));
-                    }
-                }
-            }
             System.out.println("Task " + taskId + ": log replay complete");
             System.out.println("  Seen Inputs = " + seen.size());
-            System.out.println("  Acked       = " + acked.size());
-            System.out.println("  To Retry    = " + pendingTuples.size());
             return true;
         } catch (Exception e) {
             System.err.println("Task " + taskId + ": failed to rebuild state: " + e);
