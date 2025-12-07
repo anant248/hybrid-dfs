@@ -10,7 +10,6 @@ import java.io.*;
 import java.math.BigInteger;
 import java.net.*;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -164,6 +163,8 @@ public class WorkerTask {
             case "transform": cmd.add("/home/anantg2/mp4-g76/src/main/java/utils/operator_transform.py"); break;
             case "aggregate": cmd.add("/home/anantg2/mp4-g76/src/main/java/utils/operator_aggregate.py"); break;
             case "identity": cmd.add("/home/anantg2/mp4-g76/src/main/java/utils/operator_identity.py"); break;
+            case "replace": cmd.add("/home/anantg2/mp4-g76/src/main/java/utils/operator_replace.py"); break;
+            case "wordcount": cmd.add("/home/anantg2/mp4-g76/src/main/java/utils/operator_wordcount.py"); break;
             default:
                 System.err.println("Unknown operator: " + operator);
                 System.exit(1);

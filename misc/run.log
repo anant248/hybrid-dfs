@@ -135,9 +135,29 @@ Logging commands:
 java src/main/java/server/QueryServer.java "filepath/filename"
 java src/main/java/client/DistributedLogQuerierClient.java "grep options" "query"
 
-rainstorm 1 1 identity "" dataset1.csv output.txt true false 100 100 100
+rainstorm 1 1 identity "i" dataset1.csv output.txt true false 100 100 100
 
-rainstorm 2 2 identity "" filter "STONEOAK" dataset1.csv output.txt true false 100 100 100
+rainstorm 2 1 identity "i" identity "i" dataset1.csv output.txt true false 100 100 100
+
+rainstorm 1 1 filter STONEOAK dataset1.csv output.txt true false 100 100 100
+
+rainstorm 2 1 filter "STONE" filter "STONEOAK" dataset1.csv output.txt true false 100 100 100
+
+rainstorm 6 3 filter "S" filter "ST" filter "STO" filter "STON" filter "STONE" filter "STONEOAK" dataset1.csv output.txt true false 100 100 100
+
+rainstorm 6 3 filter "S" filter "ST" filter "STO" filter "STON" filter "STONE" filter "STONEOAK" dataset1.csv output.txt false true 100 50 200
+
+rainstorm 6 3 filter "S" filter "ST" filter "STO" filter "STON" filter "STONE" filter "STONEOAK" dataset1.csv output.txt false true 100 0 1
+
+rainstorm 2 1 filter "STONE" transform "t" dataset1.csv output.txt true false 100 100 100
+
+rainstorm 2 1 filter "STONE" aggregate "2" dataset1.csv output.txt true false 100 100 100
+
+rainstorm 2 1 filter "STONE" aggregate "1" dataset1.csv output.txt true false 100 100 100
+
+rainstorm 1 1 filter "Deer Symbol" dataset1.csv output.txt true false 100 100 100
+
+rainstorm 2 2 identity "" filter STONEOAK dataset1.csv output.txt true false 100 100 100
 
 rainstorm 2 3 identity "" identity "" dataset1.csv output.txt true false 100 100 100
 
