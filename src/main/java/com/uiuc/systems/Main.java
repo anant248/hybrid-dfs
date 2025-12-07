@@ -555,12 +555,11 @@ public class Main {
             String logFile = "hdfs/rainstorm_task_" + taskId + ".log";
 
             long pid = -1L;
-            // RPC to worker's WorkerTaskServer to request PID for taskId
             try (Socket s = new Socket(host, RainStormLeader.WORKER_PORT);
                     ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream());
                     ObjectInputStream in = new ObjectInputStream(s.getInputStream())) {
 
-                out.flush(); // match WorkerTaskServer's pattern
+                out.flush();
                 GetPidRequest req = new GetPidRequest(taskId);
                 out.writeObject(req);
                 out.flush();

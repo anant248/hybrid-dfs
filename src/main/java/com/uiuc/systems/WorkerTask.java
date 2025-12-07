@@ -329,13 +329,9 @@ public class WorkerTask {
     }
 
     private void retrySend(PendingTuple p) {
-        // first check if we have exceeded max retries
         if (p.retryCount >= MAX_RETRIES) {
-            // get the downstream target this tuple is supposed to go to
             int idx = hash(p.tupleId).mod(BigInteger.valueOf(downstream.size())).intValue();
             DownstreamTarget target = downstream.get(idx);
-            
-            // notify leader that the downstream task has likely failed since we couldnt reach it after max retries
             WorkerTaskFailRequest req = new WorkerTaskFailRequest(taskId, target.getTaskId());
             try (Socket socket = new Socket(leaderIp, leaderPort);
                  ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
@@ -343,10 +339,10 @@ public class WorkerTask {
                 out.writeObject(req);
                 out.flush();
                 logger.info("Task {} notified leader {}:{} of failure of downstream task {} on host {} and port {}", taskId, leaderIp, leaderPort, target.getTaskId(), target.getHost(), target.getPort());
-                return; // exit after notifying leader
+                return;
             } catch (Exception err) {
                 logger.error("Task {}: failed to notify leader about failure of downstream task {}", taskId, target.getTaskId(), err);
-                return; // exit even if notification fails
+                return;
             }
         }
 
@@ -435,34 +431,66 @@ public class WorkerTask {
         return 10000 + taskId;
     }
 
+//    private boolean rebuildStateFromLog() {
+//        try {
+//            String hdfsName = taskLogPath;
+//
+//            // download log file from HyDFS to local
+//            String localName = "task_" + taskId + "_log_local.txt";
+//
+//            boolean ok = hdfs.getHyDFSFileToLocalFileFromOwner(hdfsName, localName);
+//            if (!ok) {
+//                logger.info("No prior log found for task {}", taskId);
+//                return false;
+//            }
+//            List<String> lines = Files.readAllLines(Paths.get("output/" + localName));
+//            for (String line : lines) {
+//                if (line.startsWith("INPUT ")) {
+//                    String tupleId = line.split(" ")[1];
+//                    seenInputTuples.add(tupleId);
+//                }
+//            }
+//            logger.info("Task {} rebuilt state: {} tuples", taskId, seenInputTuples.size());
+//
+//            return true;
+//
+//        } catch (Exception e) {
+//            logger.error("Task {} failed to rebuild state", taskId, e);
+//            return false;
+//        }
+//    }
+
+
     private boolean rebuildStateFromLog() {
         try {
-            String hdfsName = taskLogPath;
+            File restore = new File("hdfs/"+taskLogPath);
 
-            // download log file from HyDFS to local
-            String localName = "task_" + taskId + "_log_local.txt";
-
-            boolean ok = hdfs.getHyDFSFileToLocalFileFromOwner(hdfsName, localName);
-            if (!ok) {
-                logger.info("No prior log found for task {}", taskId);
+            if (!restore.exists()) {
+                System.out.println("Task " + taskId + ": no restore log found.");
                 return false;
             }
-            List<String> lines = Files.readAllLines(Paths.get("output/" + localName));
+
+            List<String> lines = Files.readAllLines(restore.toPath());
+
             for (String line : lines) {
                 if (line.startsWith("INPUT ")) {
                     String tupleId = line.split(" ")[1];
                     seenInputTuples.add(tupleId);
                 }
+                //HANDLE OUTPUT, ACK MESSAGES AS WELL
             }
-            logger.info("Task {} rebuilt state: {} tuples", taskId, seenInputTuples.size());
+
+            System.out.println("Task " + taskId + ": rebuilt state for "
+                    + seenInputTuples.size() + " tuples.");
 
             return true;
 
         } catch (Exception e) {
-            logger.error("Task {} failed to rebuild state", taskId, e);
+            System.err.println("Task " + taskId + ": failed to rebuild state: " + e);
             return false;
         }
     }
+
 
     private void appendToTaskLog(String logLine) {
         try {

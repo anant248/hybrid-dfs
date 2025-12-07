@@ -284,17 +284,17 @@ public class RainStormLeader {
         ) {
             out.writeObject(new KillWorkerTask(taskId));
             out.flush();
+            System.out.println("Kill request sent for Task " + taskId + " at PID " + pid + " on " + vmIp);
             WorkerTaskKillAckRequest ack = (WorkerTaskKillAckRequest) in.readObject();
             killSuccess = ack.isKilled();
-
-            System.out.println("Kill request sent for Task " + taskId + " at PID " + pid + " on " + vmIp);
+            System.out.println("Kill success: "+ taskId);
         } catch (Exception e) {
             System.out.println("Failed to send kill request: " + e.getMessage());
         }
 
         // check if kill was successful
         if (!killSuccess) {
-            System.err.println("Leader: Kill NOT confirmed for task " + taskId + ". Aborting kill -9 command");
+            System.err.println("Leader: Kill NOT confirmed for task " + taskId + "");
             return;
         }
 
@@ -312,8 +312,14 @@ public class RainStormLeader {
             System.err.println("Leader: restartFailedTask called for unknown taskId " + failedTaskId);
             return;
         }
+        String oldHost = old.host;
+
+        List<String> lines = fetchLog(oldHost, failedTaskId);
 
         String newHost = getNewIp(old.host);
+
+        installLog(newHost, failedTaskId, lines);
+
         TaskInfo updated = new TaskInfo(old.globalTaskId, old.stageIdx, old.idxWithinStage, newHost);
         tasks.put(failedTaskId, updated);
 
@@ -470,6 +476,41 @@ public class RainStormLeader {
             }
         }
         LeaderLoggerHelper.taskScaleDown(stage, workerTaskIdToBeKilled, taskToBeKilled.host);
+    }
+
+    private List<String> fetchLog(String oldHost, int taskId) {
+        try (Socket s = new Socket(oldHost, WORKER_PORT);
+             ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream());
+             ObjectInputStream in = new ObjectInputStream(s.getInputStream())) {
+
+            out.writeObject(new FetchLogRequest(taskId));
+            out.flush();
+
+            FetchLogResponse resp = (FetchLogResponse) in.readObject();
+            return resp.lines;
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+    }
+
+    private void installLog(String newHost, int taskId, List<String> lines) {
+        try (Socket s = new Socket(newHost, WORKER_PORT);
+             ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream());
+             ObjectInputStream in = new ObjectInputStream(s.getInputStream());) {
+
+            out.writeObject(new InstallLog(taskId, lines));
+            out.flush();
+
+            //TODO: IS THIS NECESSARY?
+            String response = (String) in.readObject();
+            if(response.equals("OK")){
+                System.out.println("Successfully installed the old log in the new vm for the task ID: "+taskId);
+            }
+            else{
+                System.out.println("An error occurred while installing the olg log file in the new vm for the task ID: "+taskId);
+            }
+
+        } catch (Exception ignored) {}
     }
 
     /* Getter method to return an immutable copy of the tasks map */

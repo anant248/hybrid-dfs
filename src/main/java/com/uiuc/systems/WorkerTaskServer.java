@@ -1,15 +1,12 @@
 package com.uiuc.systems;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -59,7 +56,7 @@ public class WorkerTaskServer implements Runnable{
                 System.out.println("Routing file created at: " + path);
             }
 
-            if (obj instanceof StartWorkerTaskRequest) {
+            else if (obj instanceof StartWorkerTaskRequest) {
                 List<String> cmd = new ArrayList<>();
                 cmd.add("java");
                 cmd.add("-cp");
@@ -108,7 +105,7 @@ public class WorkerTaskServer implements Runnable{
                 System.out.println("Started WorkerTask: " + ((StartWorkerTaskRequest) obj).getTaskId());
             }
 
-            if (obj instanceof KillWorkerTask){
+            else if (obj instanceof KillWorkerTask){
                 int taskId = ((KillWorkerTask) obj).getTaskId();
                 Process p = taskProcessMap.get(taskId);
                 boolean killed = false;
@@ -125,7 +122,7 @@ public class WorkerTaskServer implements Runnable{
                 out.flush();
             }
 
-            if (obj instanceof GetPidRequest) {
+            else if (obj instanceof GetPidRequest) {
                 int taskId = ((GetPidRequest) obj).getTaskId();
                 long pid = -1L;
                 Process p = taskProcessMap.get(taskId);
@@ -136,6 +133,52 @@ public class WorkerTaskServer implements Runnable{
                 }
                 out.writeObject(new GetPidResponse(taskId, pid));
                 out.flush();
+            }
+            else if (obj instanceof FetchLogRequest) {
+                FetchLogRequest req = (FetchLogRequest) obj;
+
+                String path = "hdfs/rainstorm_task_" + req.taskId + ".log";
+                List<String> lines = Collections.emptyList();
+
+                try {
+                    File file = new File(path);
+                    if (file.exists()) {
+                        lines = Files.readAllLines(file.toPath());
+                        //DELETE THE LOG HERE
+                        boolean deleted = file.delete();
+                        if (!deleted) {
+                            System.err.println("FetchLog handle: failed to delete old log " + path);
+                        } else {
+                            System.out.println("FetchLog handle: deleted old log " + path);
+                        }
+                    }
+                } catch (Exception ignored) {}
+
+                try {
+                    out.writeObject(new FetchLogResponse(req.taskId, lines));
+                    out.flush();
+                } catch (Exception e) {
+                    System.err.println("FetchLog: failed sending FetchLogResponse for task " + req.taskId + " : " + e);
+                }
+            }
+
+            else if (obj instanceof InstallLog) {
+                InstallLog req = (InstallLog) obj;
+                try {
+//                    File dir = new File("restore_log");
+//                    dir.mkdirs();
+                    String logsPath = "hdfs/rainstorm_task_" + req.taskId + ".log";
+                    Files.write(Paths.get(logsPath), req.lines);
+                    out.writeObject("OK");
+                    out.flush();
+                    System.out.println("WorkerTaskServer: installed restore log at " + logsPath);
+                } catch (Exception e) {
+                    System.err.println("WorkerTaskServer: failed to store restore log for task "
+                            + req.taskId + " : " + e);
+
+                    out.writeObject("ERROR");
+                    out.flush();
+                }
             }
 
         } catch (Exception e) {
