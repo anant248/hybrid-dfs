@@ -419,9 +419,8 @@ public class RainStormLeader {
 
         TaskInfo ti = new TaskInfo(newTaskId,stage,idxWithinStage,newHost);
         tasks.put(newTaskId, ti);
-        LeaderLoggerHelper.taskStart(stage,newTaskId,newHost);
+        LeaderLoggerHelper.taskScaleUp(stage,newTaskId,newHost);
         sendRoutingFileToTask(ti);
-
         if (stage > 0) {
             int upstreamStage = stage - 1;
             for (TaskInfo t : tasks.values()) {
@@ -469,6 +468,7 @@ public class RainStormLeader {
         }
         tasks.remove(workerTaskIdToBeKilled);
         workerTaskLoad.remove(workerTaskIdToBeKilled);
+        LeaderLoggerHelper.taskScaleDown(stage, workerTaskIdToBeKilled, taskToBeKilled.host);
         if (stage > 0) {
             int upstreamStage = stage-1;
             for (TaskInfo t : tasks.values()) {
@@ -477,7 +477,6 @@ public class RainStormLeader {
                 }
             }
         }
-        LeaderLoggerHelper.taskScaleDown(stage, workerTaskIdToBeKilled, taskToBeKilled.host);
     }
 
     private List<String> fetchLog(String oldHost, int taskId) {

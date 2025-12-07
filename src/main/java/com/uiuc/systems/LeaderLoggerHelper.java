@@ -41,4 +41,8 @@ public class LeaderLoggerHelper {
     public static void taskScaleDown(int stage, int taskId, String host){
         log.info("EVENT=SCALE_DOWN stage={} taskId={} host={}",stage,taskId,host);
     }
+
+    public static void taskScaleUp(int stage, int taskId, String host){
+        log.info("EVENT=SCALE_DOWN stage={} taskId={} host={}",stage,taskId,host);
+    }
 }
