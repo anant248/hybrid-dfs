@@ -13,7 +13,7 @@ public class PingAck {
     /* This class contains the logic to send pings to all the other nodes in the membership list and handle
        incoming ACKs, incoming pings, membership updates upon receiving an ACK and timeout check to detect failures.
      */
-    private static final Logger logger = LoggerFactory.getLogger(PingAck.class);
+//    private static final Logger logger = LoggerFactory.getLogger(PingAck.class);
     private static final long tSuspect = 5000;
     private static final long tFail = 2*tSuspect;
     private static final long tCleanup = 2*tFail;
@@ -142,13 +142,13 @@ public class PingAck {
 
             if (!currentNode.equals(nodeId) && nodeInfo != null && nodeInfo.getState() == NodeInfo.State.ALIVE && (System.currentTimeMillis() - pingTime) >= tFail) {
                 nodeInfo.setState(NodeInfo.State.FAILED);
-                logger.info("In Ping Ack: No suspicion mode, The following node is now failed: " + nodeId.getIp());
+//                logger.info("In Ping Ack: No suspicion mode, The following node is now failed: " + nodeId.getIp());
                 System.out.println("In Ping Ack: No suspicion mode, The following node is now failed: " + nodeId.getIp());
             }
             else if (!currentNode.equals(nodeId) && nodeInfo != null && nodeInfo.getState() == NodeInfo.State.FAILED && (System.currentTimeMillis() - pingTime) >= tCleanup){
                 currentMemberShipList.remove(nodeId);
                 pendingAcks.remove(nodeId);
-                logger.info("In Ping Ack: No suspicion mode, The following node is now cleaned up (removed) from membership: " + nodeId.getIp());
+//                logger.info("In Ping Ack: No suspicion mode, The following node is now cleaned up (removed) from membership: " + nodeId.getIp());
                 System.out.println("In Ping Ack: No suspicion mode, The following node is now cleaned up (removed) from membership: " + nodeId.getIp());
             }
         }
@@ -166,18 +166,18 @@ public class PingAck {
 
             if (nodeInfo != null && nodeInfo.getState() == NodeInfo.State.ALIVE && (System.currentTimeMillis() - pingTime) >= tSuspect) {
                 nodeInfo.setState(NodeInfo.State.SUSPECT);
-                logger.info("In Ping Ack: Suspicion mode, The following node is now suspected: " + nodeId.getIp());
+//                logger.info("In Ping Ack: Suspicion mode, The following node is now suspected: " + nodeId.getIp());
                 System.out.println("In Ping Ack: Suspicion mode, The following node is now suspected: " + nodeId.getIp());
             }
             else if (nodeInfo != null && nodeInfo.getState() == NodeInfo.State.SUSPECT && (System.currentTimeMillis() - pingTime) >= tFail) {
                 nodeInfo.setState(NodeInfo.State.FAILED);
-                logger.info("In Ping Ack: Suspicion mode, The following node is now failed: " + nodeId.getIp());
+//                logger.info("In Ping Ack: Suspicion mode, The following node is now failed: " + nodeId.getIp());
                 System.out.println("In Ping Ack: Suspicion mode, The following node is now failed: " + nodeId.getIp());
             }
             else if (nodeInfo != null && nodeInfo.getState() == NodeInfo.State.FAILED && (System.currentTimeMillis() - pingTime) >= tCleanup){
                 currentMemberShipList.remove(nodeId);
                 pendingAcks.remove(nodeId);
-                logger.info("In Ping Ack: Suspicion mode, The following node is now cleaned up (removed) from membership: " + nodeId.getIp());
+//                logger.info("In Ping Ack: Suspicion mode, The following node is now cleaned up (removed) from membership: " + nodeId.getIp());
                 System.out.println("In Ping Ack: Suspicion mode, The following node is now cleaned up (removed) from membership: " + nodeId.getIp());
             }
         }

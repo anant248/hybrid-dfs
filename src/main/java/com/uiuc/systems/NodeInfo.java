@@ -10,7 +10,7 @@ public class NodeInfo {
       timestamp is also stored to detect failures while checking for timeouts.
      */
 
-    private static final Logger logger = LoggerFactory.getLogger(NodeInfo.class);
+//    private static final Logger logger = LoggerFactory.getLogger(NodeInfo.class);
     enum State { ALIVE, SUSPECT, FAILED, LEAVE };
     private State state;
     private long lastUpdated;
@@ -94,7 +94,7 @@ public class NodeInfo {
             setLastUpdated(System.currentTimeMillis());
             setState(incomingNodeState);
         }
-        logger.info("Updated the current node state in the membership list to {}", getState());
+//        logger.info("Updated the current node state in the membership list to {}", getState());
     }
 
     public void updateNodeInfoSuspicion(NodeInfo info){
@@ -111,7 +111,7 @@ public class NodeInfo {
             setState(incomingNodeState);
             setHeartbeatCounter(incomingNodeHeartbeatCounter);
             setLastUpdated(incomingNodeLastSeen);
-            logger.info("Updated the current node with newer incarnation: inc={}, heartbeat={}, state={}, last updated={}", getIncarnationNumber(), getHeartbeatCounter(), getState(), getLastUpdated());
+//            logger.info("Updated the current node with newer incarnation: inc={}, heartbeat={}, state={}, last updated={}", getIncarnationNumber(), getHeartbeatCounter(), getState(), getLastUpdated());
         }
         else if(incomingNodeIncarnationNumber == currNodeIncarnationNumber){
             if(incomingNodeState == State.SUSPECT && currentNodeState == State.ALIVE){
@@ -122,7 +122,7 @@ public class NodeInfo {
                 setLastUpdated(System.currentTimeMillis());
                 setState(incomingNodeState);
             }
-            logger.info("Updated the current node state in the membership list to {}", getState());
+//            logger.info("Updated the current node state in the membership list to {}", getState());
         }
     }
 }

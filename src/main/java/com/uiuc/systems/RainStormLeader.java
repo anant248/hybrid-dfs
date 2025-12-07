@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.io.*;
 import java.net.Socket;
 import java.nio.file.Paths;
@@ -38,7 +37,9 @@ public class RainStormLeader {
 
     HyDFS hdfs = GlobalHyDFS.getHdfs();
 
-    private static final Logger logger = LoggerFactory.getLogger(RainStormLeader.class);
+//    private static final Logger logger = LoggerFactory.getLogger(RainStormLeader.class);
+
+    private final Logger leaderLogger;
 
     static class TaskInfo {
         final int globalTaskId;
@@ -69,6 +70,9 @@ public class RainStormLeader {
         this.localInputFileName = localInputFileName;
         this.hydfsDestFileName = hydfsDestFileName;
         this.ring = ring;
+        this.leaderLogger = LeaderLoggerFactory.createLeaderLogger();
+        leaderLogger.info("RainStorm Leader started");
+        LeaderLoggerHelper.init(this.leaderLogger);
     }
 
     public void run() throws Exception {
@@ -81,7 +85,7 @@ public class RainStormLeader {
             System.out.println("Leader: created destination file " + hydfsDestFileName + " in HyDFS");
 
         } catch (Exception e) {
-            logger.error("Leader: failed to create destination file {} in HyDFS", hydfsDestFileName, e);
+            leaderLogger.error("Leader: failed to create destination file {} in HyDFS", hydfsDestFileName, e);
         }
 
         new Thread(new LeaderServer(this, LEADER_PORT)).start();
@@ -95,9 +99,6 @@ public class RainStormLeader {
         }
         Thread.sleep(5000);
         new Thread(() -> runSourceProcess(localInputFileName)).start();
-
-        // LeaderLoggerHelper.runEnd();
-        // System.out.println("RainStorm Leader finished execution.");
     }
     private void initializeTasks() {
         int id = 0;
@@ -148,7 +149,7 @@ public class RainStormLeader {
             System.out.println("SourceProcess: started streaming input to " + stage0Tasks + " Stage 0 tasks.");
             int lineNum = 0;
             ObjectMapper mapper = new ObjectMapper();
-            long sleepMicros = (long)(1_000_000.0 / inputRate); // enforce input rate
+            long sleepMicros = (long)(1_000_000.0 / inputRate);
 
             try (BufferedReader br = new BufferedReader(new FileReader(Paths.get("inputs/" + localInput).toString()))) {
                 String line;
@@ -166,7 +167,7 @@ public class RainStormLeader {
                     js.put("srcTask", -1);
 
                     // Print if we are sending the tuple
-                    System.out.println("SourceProcess: sending tuple of id" + tid + " to Task " + stage0List.get(target).globalTaskId);
+//                    System.out.println("SourceProcess: sending tuple of id" + tid + " to Task " + stage0List.get(target).globalTaskId);
                     // System.out.println(js.toString() + "\n");
 
                     w.write(js.toString() + "\n");
@@ -177,8 +178,7 @@ public class RainStormLeader {
                 }
 
             } catch (Exception e) {
-                logger.error("SourceProcess: encountered error while streaming input", e);
-                e.printStackTrace();
+                leaderLogger.error("SourceProcess: encountered error while streaming input", e);
             }
 
             System.out.println("SourceProcess: finished streaming all input lines.");
@@ -244,7 +244,7 @@ public class RainStormLeader {
             out.writeObject(req);
             out.flush();
         } catch (Exception e) {
-            System.out.println("There was an error while sending the start request to the worker task " + t.globalTaskId);
+            leaderLogger.error("There was an error while sending the start request to the worker task " + t.globalTaskId);
         }
     }
 
@@ -291,7 +291,7 @@ public class RainStormLeader {
             killSuccess = ack.isKilled();
             System.out.println("Kill success: "+ taskId);
         } catch (Exception e) {
-            System.out.println("Failed to send kill request: " + e.getMessage());
+            leaderLogger.error("Failed to send kill request: " + e.getMessage());
         }
 
         // check if kill was successful
@@ -355,7 +355,7 @@ public class RainStormLeader {
             System.out.println("Sent routing file to task " + t.globalTaskId + " on host " + t.host);
             out.flush();
         } catch (Exception e) {
-            System.out.println("Encountered an error while sending the routing file to the worker node " + t.globalTaskId);
+            leaderLogger.error("Encountered an error while sending the routing file to the worker node " + t.globalTaskId);
         }
     }
 
@@ -386,7 +386,7 @@ public class RainStormLeader {
     private void processLoad() {
         for (int stage = 0; stage < numStages; stage++) {
 
-            // Skip auto-scaling for aggregate stages (stateful stage)
+            // Skip auto-scaling for aggregate stages
             if ("aggregate".equalsIgnoreCase(getStageOperator(stage))) continue;
 
             long total = 0;
@@ -459,7 +459,7 @@ public class RainStormLeader {
             WorkerTaskKillAckRequest ack = (WorkerTaskKillAckRequest) in.readObject();
             killSuccess = ack.isKilled();
         } catch (Exception e) {
-            System.err.println("Failed to send KillWorkerTask request for task " + workerTaskIdToBeKilled);
+            leaderLogger.error("Failed to send KillWorkerTask request for task " + workerTaskIdToBeKilled);
             return;
         }
         if (!killSuccess) {

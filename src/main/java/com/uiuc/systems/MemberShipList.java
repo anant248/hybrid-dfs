@@ -10,7 +10,7 @@ public class MemberShipList {
     /* This class constructs the membership list for the current node and contains the logic
        to update the local membership list with the incoming one in both suspicion and non-suspicion.
     */
-    private static final Logger logger = LoggerFactory.getLogger(MemberShipList.class);
+//    private static final Logger logger = LoggerFactory.getLogger(MemberShipList.class);
     private ConcurrentHashMap<NodeId,NodeInfo> memberShipList;
     private Ring ring;
     private HyDFS hyDFS;
@@ -22,21 +22,21 @@ public class MemberShipList {
     }
 
     public void addNodeEntry(NodeId nodeId,NodeInfo nodeInfo){
-        logger.info("Adding node {} to the membership list", nodeId.getIp());
+//        logger.info("Adding node {} to the membership list", nodeId.getIp());
         memberShipList.put(nodeId,nodeInfo);
     }
 
     public void addAllNodeEntries(List<NodeId> nodeId, List<NodeInfo> nodeInfo) {
         if (nodeId.size() == nodeInfo.size()) {
             for (int i = 0; i < nodeId.size(); i++) {
-                logger.info("Adding node {} to the membership list", nodeId.get(i).getIp());
+//                logger.info("Adding node {} to the membership list", nodeId.get(i).getIp());
                 memberShipList.put(nodeId.get(i), nodeInfo.get(i));
             }
         }
     }
 
     public void removeNodeEntry(NodeId nodeId){
-        logger.info("Removing the node {} from the membership list", nodeId.getIp());
+//        logger.info("Removing the node {} from the membership list", nodeId.getIp());
         memberShipList.remove(nodeId);
     }
 
@@ -78,21 +78,21 @@ public class MemberShipList {
 
             // add if we dont have the node we are looking at
             if(currentNodeInfo == null){
-                logger.info("Adding the node {} to the membership list", nodeId.getIp());
+//                logger.info("Adding the node {} to the membership list", nodeId.getIp());
                 memberShipList.put(nodeId, nodeInfo);
                 ring.addNode(nodeId);
                 hyDFS.rebalance();
             }
             //handle leave and remove if leave is there
             else if(nodeInfo.getState() == NodeInfo.State.LEAVE) {
-                logger.info("Removing the node {} from the membership list for the incoming status LEAVE", nodeId.getIp());
+//                logger.info("Removing the node {} from the membership list for the incoming status LEAVE", nodeId.getIp());
                 memberShipList.remove(nodeId);
                 ring.removeNode(nodeId);
                 hyDFS.rereplicate();
             }
             // update our node entry if the incoming is showing a more up to date heartbeat counter
             else{
-                logger.info("Updating the current node {} in the membership list", nodeId.getIp());
+//                logger.info("Updating the current node {} in the membership list", nodeId.getIp());
                 currentNodeInfo.updateNodeInfoNoSuspicion(nodeInfo);
                 memberShipList.put(nodeId, currentNodeInfo);
             }
@@ -116,7 +116,7 @@ public class MemberShipList {
 
             if(nodeId.equals(receiver)){
                 if(nodeInfo.getState() != NodeInfo.State.ALIVE){
-                    logger.info("Updating the current node {} incarnation number and refuting the incoming suspicion", nodeId.getIp());
+//                    logger.info("Updating the current node {} incarnation number and refuting the incoming suspicion", nodeId.getIp());
                     currentNodeInfo.setState(NodeInfo.State.ALIVE);
                     currentNodeInfo.setIncarnationNumber(currentNodeInfo.getIncarnationNumber() + 1);
                 }
@@ -127,17 +127,17 @@ public class MemberShipList {
 
             // add if we dont have the node we are looking at
             if(currentNodeInfo == null){
-                logger.info("Adding the node {} to the membership list", nodeId.getIp());
+//                logger.info("Adding the node {} to the membership list", nodeId.getIp());
                 memberShipList.put(nodeId, nodeInfo);
             }
             //handle leave and remove if leave is there
             else if(nodeInfo.getState() == NodeInfo.State.LEAVE) {
-                logger.info("Removing the node {} from the membership list for the incoming status LEAVE", nodeId.getIp());
+//                logger.info("Removing the node {} from the membership list for the incoming status LEAVE", nodeId.getIp());
                 memberShipList.remove(nodeId);
             }
             // update our node entry if the incoming is showing a more up to date heartbeat counter
             else{
-                logger.info("Updating the current node {} in the membership list", nodeId.getIp());
+//                logger.info("Updating the current node {} in the membership list", nodeId.getIp());
                 currentNodeInfo.updateNodeInfoSuspicion(nodeInfo);
                 memberShipList.put(nodeId, currentNodeInfo);
             }
@@ -176,15 +176,15 @@ public class MemberShipList {
 
             //handle leave and remove if leave is there
             if(currentNodeInfo == null){
-                logger.info("Adding the node {} to the membership list", nodeId.getIp());
+//                logger.info("Adding the node {} to the membership list", nodeId.getIp());
                 memberShipList.put(nodeId, nodeInfo);
             }
             else if(nodeInfo.getState() == NodeInfo.State.LEAVE) {
-                logger.info("Removing the node {} from the membership list for the incoming status LEAVE", nodeId.getIp());
+//                logger.info("Removing the node {} from the membership list for the incoming status LEAVE", nodeId.getIp());
                 memberShipList.remove(nodeId);
             }
             else{
-                logger.info("Updating the current node {} in the membership list", nodeId.getIp());
+//                logger.info("Updating the current node {} in the membership list", nodeId.getIp());
                 currentNodeInfo.setState(nodeInfo.getState());
             }
         }
@@ -214,15 +214,15 @@ public class MemberShipList {
 
             //handle leave and remove if leave is there
             if(currentNodeInfo == null){
-                logger.info("Adding the node {} to the membership list", nodeId.getIp());
+//                logger.info("Adding the node {} to the membership list", nodeId.getIp());
                 memberShipList.put(nodeId, nodeInfo);
             }
             else if(nodeInfo.getState() == NodeInfo.State.LEAVE) {
-                logger.info("Removing the node {} from the membership list for the incoming status LEAVE", nodeId.getIp());
+//                logger.info("Removing the node {} from the membership list for the incoming status LEAVE", nodeId.getIp());
                 memberShipList.remove(nodeId);
             }
             else{
-                logger.info("Updating the current node {} in the membership list", nodeId.getIp());
+//                logger.info("Updating the current node {} in the membership list", nodeId.getIp());
                 currentNodeInfo.setState(nodeInfo.getState());
             }
         }

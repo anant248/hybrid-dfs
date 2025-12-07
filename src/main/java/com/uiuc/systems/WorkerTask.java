@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.io.*;
 import java.math.BigInteger;
 import java.net.*;
@@ -42,7 +41,9 @@ public class WorkerTask {
 
     private final AtomicLong tuplesCount = new AtomicLong(0);
 
-    private static final Logger logger = LoggerFactory.getLogger(WorkerTask.class);
+//    private static final Logger taskLogger = LoggerFactory.getLogger(WorkerTask.class);
+
+    private final Logger taskLogger;
 
     static class PendingTuple implements Serializable {
         final String tupleId;
@@ -77,9 +78,14 @@ public class WorkerTask {
         this.ROUTING_FILE = "routing/routing_" + taskId + ".conf";
         this.routingFile = new File(ROUTING_FILE);
 
+        //build logger
+        this.taskLogger = TaskLoggerFactory.createTaskLogger(taskId);
+        taskLogger.info("WorkerTask " + taskId + " started");
+
         // build out HyDFS for this worker task
         NodeId currentNode = new NodeId(currentIp, WORKER_TASK_PORT, System.currentTimeMillis());
         this.hdfs = new HyDFS(currentNode, ring);
+
 
         // if rebuildState was false, create an empty log file in HyDFS, otherwise the appends will fail
         // if rebuildState was true, the log file already exists
@@ -90,7 +96,7 @@ public class WorkerTask {
                 System.out.println("Task " + taskId + ": created new HyDFS log file " + taskLogPath);
 
             } catch (Exception e) {
-                logger.error("Task {}: failed to create HyDFS log file {}", taskId, taskLogPath, e);
+                taskLogger.error("Task {}: failed to create HyDFS log file {}", taskId, taskLogPath, e);
             }
         }
     }
@@ -145,10 +151,10 @@ public class WorkerTask {
         stdoutThread.start();
 
         System.out.println("WorkerTask " + taskId + " started operator " + operator);
-        logger.info("Task {} launched operator {}", taskId, operator);
+        taskLogger.info("Task {} launched operator {}", taskId, operator);
 
         System.out.println("Task " + taskId + ": started stdout reader thread");
-        logger.info("Task {} started stdout reader thread", taskId);
+        taskLogger.info("Task {} started stdout reader thread", taskId);
 
         sendLoadStatusToLeader();
     }
@@ -184,7 +190,7 @@ public class WorkerTask {
                     System.err.println("[Task-" + taskId + " STDERR] " + line);
                 }
             } catch (Exception e) {
-                logger.debug("Task {} stderr reader closed", taskId);
+                taskLogger.error("Task {} stderr reader closed", taskId);
             }
         }, "stderr-consumer-" + taskId).start();
 
@@ -226,7 +232,7 @@ public class WorkerTask {
                     written = hdfs.appendTuple(OUTPUT_FILE, csvData + "\n");
 
                     if (!written) {
-                        logger.error("Task {} failed to append output tuple {} to output file {}", taskId, line, OUTPUT_FILE);
+                        taskLogger.error("Task {} failed to append output tuple {} to output file {}", taskId, line, OUTPUT_FILE);
                     }
 
                 } 
@@ -268,7 +274,7 @@ public class WorkerTask {
                         this.downstream.clear();
                         this.downstream.addAll(newDownstream);
                         System.out.println("Task " + taskId + ": reloaded downstream targets from updated routing file.");
-                        logger.info("Task {} reloaded downstream targets from updated routing file", taskId);
+                        taskLogger.info("Task {} reloaded downstream targets from updated routing file", taskId);
                     }
                 }
             }
@@ -286,7 +292,7 @@ public class WorkerTask {
             }
         } catch(Exception e){
             System.err.println("Task " + taskId + " failed to forward tuple: " + e);
-            logger.error("Failed to forward the tuple from task {}",taskId,e);
+            taskLogger.error("Failed to forward the tuple from task {}",taskId,e);
             e.printStackTrace();
         }
     }
@@ -297,14 +303,14 @@ public class WorkerTask {
         new Thread(() -> {
             try (ServerSocket server = new ServerSocket(listenPort)) {
                 System.out.println("Starting input server for task " + taskId + " listening on port " + listenPort);
-                logger.info("Task {} input server started on port {}", taskId, listenPort);
+                taskLogger.info("Task {} input server started on port {}", taskId, listenPort);
 
                 while (true) {
                     Socket client = server.accept();
                     new Thread(() -> handleClient(client)).start();
                 }
             } catch (Exception e) {
-                logger.error("Task {} input server crashed", taskId, e);
+                taskLogger.error("Task {} input server crashed", taskId, e);
             }
         }).start();
     }
@@ -321,7 +327,7 @@ public class WorkerTask {
                     }
                     Thread.sleep(500);
                 } catch (Exception e) {
-                    logger.error("Retry thread crashed", e);
+                    taskLogger.error("Retry thread crashed", e);
                 }
             }
         });
@@ -329,7 +335,7 @@ public class WorkerTask {
         retryThread.start();
 
         System.out.println("Task " + taskId + ": started retry thread");
-        logger.info("Task {} started retry thread", taskId);
+        taskLogger.info("Task {} started retry thread", taskId);
     }
 
     private void retrySend(PendingTuple p) {
@@ -345,7 +351,7 @@ public class WorkerTask {
                 WorkerLoggerHelper.taskFailNotification(taskId, leaderIp, leaderPort, target);
                 return; // exit after notifying leader
             } catch (Exception err) {
-                logger.error("Task {}: failed to notify leader about failure of downstream task {}", taskId, target.getTaskId(), err);
+                taskLogger.error("Task {}: failed to notify leader about failure of downstream task {}", taskId, target.getTaskId(), err);
                 return;
             }
         }
@@ -402,8 +408,7 @@ public class WorkerTask {
             }
         }
         catch (Exception e) {
-            logger.error("Task {} handleClient error", taskId, e);
-            System.out.println("Task " + taskId + " handleClient error: " + e);
+            taskLogger.error("Task {} handleClient error", taskId, e);
         }
     }
 
@@ -419,8 +424,7 @@ public class WorkerTask {
                 out.flush();
             }
         } catch (Exception e) {
-            logger.error("Task {} failed to send ACK for {} to upstream {}", taskId, tupleId, upstreamTaskId, e);
-            System.out.println("Task " + taskId + " failed to send ACK for " + tupleId + " to upstream " + upstreamTaskId + ": " + e);
+            taskLogger.error("Task {} failed to send ACK for {} to upstream {}", taskId, tupleId, upstreamTaskId, e);
         }
     }
 
@@ -470,7 +474,7 @@ public class WorkerTask {
             // append to the tasks log file in HyDFS
             hdfs.appendTuple(taskLogPath, logLine + "\n");
         } catch (Exception e) {
-            logger.error("Task {}: failed to append to HyDFS log {}", taskId, taskLogPath, e);
+            taskLogger.error("Task {}: failed to append to HyDFS log {}", taskId, taskLogPath, e);
         }
     }
 
@@ -479,14 +483,14 @@ public class WorkerTask {
         new Thread(() -> {
             try (ServerSocket server = new ServerSocket(ackPort)) {
                 System.out.println("Task " + taskId + " ACK server listening on port " + ackPort);
-                logger.info("Task {} ACK server started on port {}", taskId, ackPort);
+                taskLogger.info("Task {} ACK server started on port {}", taskId, ackPort);
 
                 while (true) {
                     Socket client = server.accept();
                     new Thread(() -> handleAck(client)).start();
                 }
             } catch (Exception e) {
-                logger.error("Task {} ACK server crashed", taskId, e);
+                taskLogger.error("Task {} ACK server crashed", taskId, e);
             }
         }).start();
     }
@@ -499,9 +503,9 @@ public class WorkerTask {
             fos.write(("ACKED " + tupleId + "\n").getBytes());
             fos.flush();
             pendingTuples.remove(tupleId);
-            logger.debug("Task {} received ACK for tuple {}, removing from pending tuples map", taskId, tupleId);
+            taskLogger.info("Task {} received ACK for tuple {}, removing from pending tuples map", taskId, tupleId);
         } catch (Exception e) {
-            logger.error("Task {} failed to handle ACK", taskId, e);
+            taskLogger.error("Task {} failed to handle ACK", taskId, e);
         }
     }
 
@@ -511,18 +515,18 @@ public class WorkerTask {
                 try {
                     Thread.sleep(1000);
                     long count = tuplesCount.getAndSet(0);
+                    taskLogger.info("Processed number of tuples per second: "+ count);
                     WorkerTaskLoad report = new WorkerTaskLoad(taskId, stageIdx, count);
                     sendLoadStatus(report);
                 } catch (Exception e) {
-                    logger.error("Task {} load reporter crashed", taskId, e);
+                    taskLogger.error("Task {} load reporter crashed", taskId, e);
                 }
             }
         });
         reporter.setDaemon(true);
         reporter.start();
-
         System.out.println("Task " + taskId + ": started load reporter thread");
-        logger.info("Task {} started load reporter thread", taskId);
+        taskLogger.info("Task {} started load reporter thread", taskId);
     }
 
     private void sendLoadStatus(WorkerTaskLoad rep) {
@@ -531,7 +535,7 @@ public class WorkerTask {
             out.writeObject(rep);
             out.flush();
         } catch (Exception e) {
-            logger.error("Task {} failed sending load report to leader {}:{}", taskId, leaderIp, leaderPort, e);
+            taskLogger.error("Task {} failed sending load report to leader {}:{}", taskId, leaderIp, leaderPort, e);
         }
     }
 
