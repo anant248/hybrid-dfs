@@ -114,6 +114,7 @@ public class WorkerTaskServer implements Runnable{
                     killed = true;
                     taskProcessMap.remove(taskId);
                     System.out.println("Killed WorkerTask " + taskId + " (PID=" + p.pid() + ")");
+                    WorkerLoggerHelper.taskEnd(taskId, "KILLED_BY_WORKER_SERVER");
                 } else {
                     System.out.println("No running process found for WorkerTask " + taskId);
                 }

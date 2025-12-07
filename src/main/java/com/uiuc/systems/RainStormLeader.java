@@ -2,6 +2,8 @@ package com.uiuc.systems;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.net.Socket;
@@ -36,7 +38,7 @@ public class RainStormLeader {
 
     HyDFS hdfs = GlobalHyDFS.getHdfs();
 
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(WorkerTask.class);
+    private static final Logger logger = LoggerFactory.getLogger(RainStormLeader.class);
 
     static class TaskInfo {
         final int globalTaskId;

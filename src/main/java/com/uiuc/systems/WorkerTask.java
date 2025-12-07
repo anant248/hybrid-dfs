@@ -3,6 +3,8 @@ package com.uiuc.systems;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.math.BigInteger;
@@ -41,7 +43,7 @@ public class WorkerTask {
 
     private final AtomicLong tuplesCount = new AtomicLong(0);
 
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(WorkerTask.class);
+    private static final Logger logger = LoggerFactory.getLogger(WorkerTask.class);
 
     static class PendingTuple implements Serializable {
         final String tupleId;
@@ -115,6 +117,7 @@ public class WorkerTask {
         String operatorArgs = args[9];
 
         System.out.println("Worker Task Main Args Parsed: leaderIp=" + leaderIp + ", leaderPort=" + leaderPort + ", taskId=" + taskId + ", stageIdx=" + stageIdx + ", operatorType=" + operatorType + ", isFinal=" + isFinal + ", outputFile=" + outputFile + ", workerHost=" + workerHost + ", operatorArgs=" + operatorArgs + ", ringJson=" + ringJson);
+        WorkerLoggerHelper.taskStart(stageIdx, taskId, workerHost, operatorType);
 
         // Load downstream info—this would come from a config or leader message
         List<DownstreamTarget> downstream = RoutingLoader.load(taskId);
@@ -338,8 +341,8 @@ public class WorkerTask {
                 
                 out.writeObject(req);
                 out.flush();
-                logger.info("Task {} notified leader {}:{} of failure of downstream task {} on host {} and port {}", taskId, leaderIp, leaderPort, target.getTaskId(), target.getHost(), target.getPort());
-                return;
+                WorkerLoggerHelper.taskFailNotification(taskId, leaderIp, leaderPort, target);
+                return; // exit after notifying leader
             } catch (Exception err) {
                 logger.error("Task {}: failed to notify leader about failure of downstream task {}", taskId, target.getTaskId(), err);
                 return;
@@ -347,7 +350,7 @@ public class WorkerTask {
         }
 
         // otherwise proceed with retrying the send
-        logger.info("Task {} retrying tuple {} (attempt #{})", taskId, p.tupleId, p.retryCount + 1);
+        WorkerLoggerHelper.retryTupleSend(taskId, p);
 
         // try forwarding the tuple again
         forwardTuple(p.json, p.retryCount + 1);
@@ -367,8 +370,9 @@ public class WorkerTask {
                 JsonNode js = mapper.readTree(line);
                 String tupleId = js.get("id").asText();
                 int upstreamTask = js.get("srcTask").asInt();
+                String tuple = js.get("line").asText();
                 if (seenInputTuples.contains(tupleId)) {
-                    logger.debug("Task {} dropping duplicate tuple {}", taskId, tupleId);
+                    WorkerLoggerHelper.rejectedDuplicateTuples(stageIdx, taskId, tuple, Integer.parseInt(tupleId));
                     
                     // ack back to upstream even in case of duplicate
                     // only send ack if upstreamTask is not -1 (source task)
