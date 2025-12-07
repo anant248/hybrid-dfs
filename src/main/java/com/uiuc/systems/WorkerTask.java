@@ -86,7 +86,7 @@ public class WorkerTask {
         // if rebuildState was true, the log file already exists
         if (!rebuildStateFromLog()) {
             // create an empty log file in HyDFS of this VM
-            try (FileOutputStream fos = new FileOutputStream("hdfs/" + taskLogPath)){               
+            try (FileOutputStream fos = new FileOutputStream("hdfs/" + taskLogPath,true)){
                 fos.write(0);
                 System.out.println("Task " + taskId + ": created new HyDFS log file " + taskLogPath);
 
@@ -467,7 +467,7 @@ public class WorkerTask {
 
     private boolean rebuildStateFromLog() {
         try {
-            File restore = new File("hdfs/"+taskLogPath);
+            File restore = new File("hdfs/" + taskLogPath);
 
             if (!restore.exists()) {
                 System.out.println("Task " + taskId + ": no restore log found.");
@@ -476,25 +476,42 @@ public class WorkerTask {
 
             List<String> lines = Files.readAllLines(restore.toPath());
 
+            // Track both INPUT and ACKED
+            Set<String> seen = new HashSet<>();
+            Set<String> acked = new HashSet<>();
+
             for (String line : lines) {
+                line = line.trim();
+
                 if (line.startsWith("INPUT ")) {
-                    String tupleId = line.split(" ")[1];
-                    seenInputTuples.add(tupleId);
+                    String tupleId = line.split(" ")[1].trim();
+                    seen.add(tupleId);
                 }
-                //HANDLE OUTPUT, ACK MESSAGES AS WELL
+                else if (line.startsWith("ACKED ")) {
+                    String tupleId = line.split(" ")[1].trim();
+                    acked.add(tupleId);
+                }
             }
 
-            System.out.println("Task " + taskId + ": rebuilt state for "
-                    + seenInputTuples.size() + " tuples.");
+            seenInputTuples.addAll(seen);
 
+            if (!isFinal) {
+                for (String tupleId : seen) {
+                    if (!acked.contains(tupleId)) {
+                        pendingTuples.put(tupleId, new PendingTuple(tupleId, null, 0));
+                    }
+                }
+            }
+            System.out.println("Task " + taskId + ": log replay complete");
+            System.out.println("  Seen Inputs = " + seen.size());
+            System.out.println("  Acked       = " + acked.size());
+            System.out.println("  To Retry    = " + pendingTuples.size());
             return true;
-
         } catch (Exception e) {
             System.err.println("Task " + taskId + ": failed to rebuild state: " + e);
             return false;
         }
     }
-
 
     private void appendToTaskLog(String logLine) {
         try {
@@ -523,9 +540,12 @@ public class WorkerTask {
     }
 
     private void handleAck(Socket client) {
-        try (ObjectInputStream in = new ObjectInputStream(client.getInputStream())) {
+        try (ObjectInputStream in = new ObjectInputStream(client.getInputStream());
+             FileOutputStream fos = new FileOutputStream("hdfs/" + taskLogPath, true);) {
             TupleAck ack = (TupleAck) in.readObject();
             String tupleId = ack.getTupleId();
+            fos.write(("ACKED " + tupleId + "\n").getBytes());
+            fos.flush();
             pendingTuples.remove(tupleId);
             logger.debug("Task {} received ACK for tuple {}, removing from pending tuples map", taskId, tupleId);
         } catch (Exception e) {
