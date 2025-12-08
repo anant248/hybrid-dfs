@@ -827,10 +827,10 @@ public class HyDFS {
         String fileName = req.getFileName();
         FileMetaData fileMeta = fileMetaMap.get(fileName);
 
-        if (fileMeta == null) {
-            sendResponseToClient(client, "NACK",out);
-            return;
-        }
+//        if (fileMeta == null) {
+//            sendResponseToClient(client, "NACK",out);
+//            return;
+//        }
 
         File file = new File("hdfs/" + fileName);
         if (!file.exists()) {
