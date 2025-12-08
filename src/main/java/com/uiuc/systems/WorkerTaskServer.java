@@ -10,10 +10,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+/*
+   This class contains the worker task server which will create the worker task process upon
+   receiving a request from the leader, handle downstream routing request and kill worker task request.
+*/
 
 public class WorkerTaskServer implements Runnable{
     private static final int PORT = 7979;
@@ -36,7 +40,8 @@ public class WorkerTaskServer implements Runnable{
                 new Thread(() -> handle(socket)).start();
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+//            throw new RuntimeException(e);
+            System.out.println("Worker task server stopped");
         } finally {
             closeServerSocket();
         }
@@ -46,7 +51,6 @@ public class WorkerTaskServer implements Runnable{
         try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
         ) {
-            //TODO: DO WE HAVE TO FLUSH INITIALLY TO EXCHANGE HEADERS?
             out.flush();
             Object obj = in.readObject();
             if (obj instanceof WorkerTaskRoutingFileRequest) {
@@ -84,19 +88,6 @@ public class WorkerTaskServer implements Runnable{
                 System.out.println("Starting WorkerTask with command: " + String.join(" ", cmd));
 
                 Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
- 
-                // new Thread(() -> {
-                //     try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
-                //         String line;
-                //         while ((line = br.readLine()) != null) {
-                //             System.out.println("[WorkerTask OUTPUT] " + line);
-                //         }
-                //     } catch (Exception e) {
-                //         e.printStackTrace();
-                //     }
-
-                // }).start();
-
 
                 System.out.println("process started with PID=" + p.pid());
 
@@ -166,8 +157,6 @@ public class WorkerTaskServer implements Runnable{
             else if (obj instanceof InstallLog) {
                 InstallLog req = (InstallLog) obj;
                 try {
-//                    File dir = new File("restore_log");
-//                    dir.mkdirs();
                     String logsPath = "hdfs/rainstorm_task_" + req.taskId + ".log";
                     Files.write(Paths.get(logsPath), req.lines);
                     out.writeObject("OK");
@@ -187,7 +176,6 @@ public class WorkerTaskServer implements Runnable{
         }
     }
 
-    //Helper to retrieve the process ID associated with the task ID, call this in Main.java
     public static Long getPidForTask(int taskId) {
         return taskProcessMap.get(taskId).pid();
     }

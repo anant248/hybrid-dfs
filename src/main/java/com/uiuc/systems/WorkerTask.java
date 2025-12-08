@@ -14,6 +14,13 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+/* This is a WorkerTask class which will process the incoming tuples and forward the tuples to the tasks
+   in the next stage. The tuples are processed through a python script which is run by a separate
+   java process and listen to the standard output. The worker task also sends its load to the leader every second.
+   It keeps track of the processed tuples in the append log and also waits for the downstream tasks to ACK
+   for the tuple it had sent and this will also be tracked in the append log. This class also contains the
+   logic to reply the failed task log and restore the state.
+*/
 public class WorkerTask {
     private final String leaderIp;
     private static final int WORKER_TASK_PORT = 6971;
@@ -41,10 +48,9 @@ public class WorkerTask {
 
     private final AtomicLong tuplesCount = new AtomicLong(0);
 
-//    private static final Logger taskLogger = LoggerFactory.getLogger(WorkerTask.class);
-
     private final Logger taskLogger;
 
+    // This class is used to keep track of pending tuples that were not acked by the downstream targets
     static class PendingTuple implements Serializable {
         final String tupleId;
         final String json;
@@ -78,7 +84,7 @@ public class WorkerTask {
         this.ROUTING_FILE = "routing/routing_" + taskId + ".conf";
         this.routingFile = new File(ROUTING_FILE);
 
-        //build logger
+        //build the worker task logger
         this.taskLogger = TaskLoggerFactory.createTaskLogger(taskId);
         taskLogger.info("WorkerTask " + taskId + " started");
 
@@ -134,6 +140,11 @@ public class WorkerTask {
         worker.runTask();
     }
 
+    /*  This method will start up the input server to handle the incoming tuples,
+        and an ack server to handle acks from downstream targets, retry thread to retry sending pending tuples
+        and reader thread to read the standard.
+    */
+
     public void runTask() throws Exception {
         // Start input listener (TCP)
         startAckServer();
@@ -143,7 +154,7 @@ public class WorkerTask {
         // launch operator subprocess after servers are up
         launchOperator();
 
-        Thread.sleep(500); // wait for python operator to be ready
+        Thread.sleep(500);
 
         // Start stdout reader thread
         Thread stdoutThread = new Thread(this::stdoutReaderLoop, "stdout-reader-" + taskId);
@@ -159,6 +170,7 @@ public class WorkerTask {
         sendLoadStatusToLeader();
     }
 
+    // This method is used to invoke the python script that will process the tuple and send outputs back
     private void launchOperator() throws IOException {
         List<String> cmd = new ArrayList<>();
         cmd.add("python3");
@@ -198,6 +210,7 @@ public class WorkerTask {
         opStdout = new BufferedReader(new InputStreamReader(operatorProc.getInputStream()));
     }
 
+    // This method is used to handle the incoming outputs from python stdout
     private void stdoutReaderLoop() {
         try {
             String line;
@@ -247,6 +260,7 @@ public class WorkerTask {
         }
     }
 
+    // This method handles forwarding of the tuple to the downstream targets and adds them to the pendingTuples map until it receives an ACK
     private void forwardTuple(String output, int retryCount) {
         try {
             // parse output JSON
@@ -297,6 +311,7 @@ public class WorkerTask {
         }
     }
 
+    // This will startup the input server to handle incoming tuples
     private void startInputServer() throws Exception {
         int listenPort = 9000 + taskId; // deterministic mapping
 
@@ -315,6 +330,7 @@ public class WorkerTask {
         }).start();
     }
 
+    // This will start up the retry thread to retry the failed tuples by checking every RETRY_INTERVAL ms
     private void startRetryThread() {
         Thread retryThread = new Thread(() -> {
             while (true) {
@@ -338,6 +354,7 @@ public class WorkerTask {
         taskLogger.info("Task {} started retry thread", taskId);
     }
 
+    // This method is used to retry the pending tuple to the downstream target
     private void retrySend(PendingTuple p) {
         if (p.retryCount >= MAX_RETRIES) {
             int idx = hash(p.tupleId).mod(BigInteger.valueOf(downstream.size())).intValue();
@@ -368,6 +385,8 @@ public class WorkerTask {
         forwardTuple(p.json, p.retryCount);
     }
 
+    // This method is called to add the tuple id to the append log and forward the tuple to the stdin
+    // and if the tuple has already been processed, it would still send an ACK to the upstream target
     private void handleClient(Socket client) {
         try (BufferedReader r = new BufferedReader(new InputStreamReader(client.getInputStream()));
              FileOutputStream fos = new FileOutputStream("hdfs/" + taskLogPath, true)) {
@@ -412,6 +431,7 @@ public class WorkerTask {
         }
     }
 
+    // This method is used to send an ACK back to the upstream task who sent the tuple
     private void sendAck(int upstreamTaskId, String tupleId) {
         try {
             String host = hostOf(upstreamTaskId);
@@ -440,6 +460,7 @@ public class WorkerTask {
         return 10000 + taskId;
     }
 
+    // This method is invoked at the start of the worker task to replay the log of failed task and restore the state in the new host
     private boolean rebuildStateFromLog() {
         try {
             File restore = new File("hdfs/" + taskLogPath);
@@ -478,6 +499,7 @@ public class WorkerTask {
         }
     }
 
+    // This method is invoked at the start to startup the ACK server and listen to the downstream ACKs
     private void startAckServer() {
         int ackPort = 10000 + taskId;
         new Thread(() -> {
@@ -495,6 +517,7 @@ public class WorkerTask {
         }).start();
     }
 
+    // This method is used to handle the ACKs received for a tuple
     private void handleAck(Socket client) {
         try (ObjectInputStream in = new ObjectInputStream(client.getInputStream());
              FileOutputStream fos = new FileOutputStream("hdfs/" + taskLogPath, true);) {
@@ -509,6 +532,7 @@ public class WorkerTask {
         }
     }
 
+    // This method is called to send the number of tuples this task has processed per second and the leader will use this info for auotscaling
     private void sendLoadStatusToLeader() {
         Thread reporter = new Thread(() -> {
             while (true) {
@@ -529,6 +553,7 @@ public class WorkerTask {
         taskLogger.info("Task {} started load reporter thread", taskId);
     }
 
+    // helper method to open a socket to the leader and send the load
     private void sendLoadStatus(WorkerTaskLoad rep) {
         try (Socket sock = new Socket(leaderIp, leaderPort);
              ObjectOutputStream out = new ObjectOutputStream(sock.getOutputStream())) {

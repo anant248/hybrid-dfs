@@ -12,6 +12,18 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+/*
+  This is a Rainstorm leader class. Rainstorm leader is responsible for creating the worker task processes for each stage and assigning them to
+  run on a particular host and it uses modulo operation to decide which host a worker task should run on.
+  It also sends the downstream routing configuration to the hosts that these worker tasks to run on, so that
+  the task can know who to send it's output to after it has processed the tuple. The leader is responsible for
+  streaming the tuples from the input file and it will be sent to the tasks in the next stage.
+
+  The leader handles auto-scaling operations like scale up or scale down based on the average number
+  of tuples a task processed. The leader also handles when a worker task has failed, it tries to restart
+  that failed worker task in a new host and also sends the downstream routing configuration to the tasks in
+  the previous stage.
+*  */
 public class RainStormLeader {
     public static final int LEADER_PORT = 7777;
     public static final int WORKER_PORT = 7979;
@@ -36,8 +48,6 @@ public class RainStormLeader {
     private final AtomicLong nextGlobalTupleId = new AtomicLong(0);
 
     HyDFS hdfs = GlobalHyDFS.getHdfs();
-
-//    private static final Logger logger = LoggerFactory.getLogger(RainStormLeader.class);
 
     private final Logger leaderLogger;
 
@@ -75,6 +85,10 @@ public class RainStormLeader {
         LeaderLoggerHelper.init(this.leaderLogger);
     }
 
+    /* The main class will call this run() method to kickoff RainStorm. This will start up the leader server, distribute downstream
+       routing info for all the tasks, stream the input tuples, launch all the worker tasks and also keep track of the number of
+       tuples processed/sec by the worker tasks to calculate the average and use that when autoscaling is enabled.
+    */
     public void run() throws Exception {
         LeaderLoggerHelper.runStart();
         System.out.println("RainStorm Leader starting on host " + leaderHost);
@@ -113,6 +127,8 @@ public class RainStormLeader {
         }
     }
 
+
+   // This method is used to start streaming the input tuples or lines
     private void runSourceProcess(String localInput) {
         try {
             int stage0Tasks = 0;
@@ -198,6 +214,8 @@ public class RainStormLeader {
         }
     }
 
+
+    // This method is used to build downstream routing info which the tasks will use to send the tuples to
     private String buildRoutingFile(TaskInfo t) {
         StringBuilder sb = new StringBuilder();
         if (t.stageIdx == numStages - 1) {
@@ -220,6 +238,8 @@ public class RainStormLeader {
         return sb.toString();
     }
 
+
+    // Launch all worker tasks in all stages
     private void launchAllWorkerTasks() throws Exception {
         for (int i = 0; i < numStages; i++) {
             // get operator type and args for this task we are starting based on its stage and the initial operatorsAndArgs list
@@ -248,6 +268,7 @@ public class RainStormLeader {
         }
     }
 
+    // This method is used to determine which host the worker task should run on
     private String getNewIp(String oldHost) {
         int idx = vmHosts.indexOf(oldHost);
         if (idx == -1) {
@@ -308,6 +329,7 @@ public class RainStormLeader {
         workerTaskFailureHandler(req);
     }
 
+    // This method is invoked when a worker task has failed or was killed and it needs to be restarted and executed on a different host
     private void restartFailedTask(int failedTaskId) {
         TaskInfo old = tasks.get(failedTaskId);
         if (old == null) {
@@ -345,6 +367,7 @@ public class RainStormLeader {
         LeaderLoggerHelper.taskRestart(updated.stageIdx, updated.globalTaskId, newHost);
     }
 
+    // This method is used to open a socket on the worker task server to send the downstream routing info
     private void sendRoutingFileToTask(TaskInfo t) {
         String routing = buildRoutingFile(t);
         WorkerTaskRoutingFileRequest req = new WorkerTaskRoutingFileRequest(routing, t.globalTaskId);
@@ -359,6 +382,7 @@ public class RainStormLeader {
         }
     }
 
+    // This method will handle a worker task failure and call restart
     public void workerTaskFailureHandler(WorkerTaskFailRequest req){
         TaskInfo failedTaskInfo = tasks.get(req.getFailedTaskId());
         if (failedTaskInfo == null) {
@@ -383,6 +407,7 @@ public class RainStormLeader {
         }
     }
 
+    // This method is used to calculate the average number of tuples each task has processed which is used in autoscaling
     private void processLoad() {
         for (int stage = 0; stage < numStages; stage++) {
 
@@ -407,6 +432,7 @@ public class RainStormLeader {
         }
     }
 
+    // This method is invoked when the avg tuples/sec is greater than the higher watermark
     private void scaleUp(int stage) {
         int newTaskId = tasks.keySet().stream().mapToInt(x -> x).max().orElse(-1) + 1;
         String newHost = vmHosts.get(newTaskId % vmHosts.size());
@@ -437,6 +463,7 @@ public class RainStormLeader {
         launchSingleWorkerTask(ti, operatorType, operatorArgs);
     }
 
+    // This method is invoked when the avg tuples/sec is lower than the lower watermark
     private void scaleDown(int stage) {
         TaskInfo taskToBeKilled = null;
         for (TaskInfo t : tasks.values()) {
@@ -479,6 +506,8 @@ public class RainStormLeader {
         }
     }
 
+    // This method is invoked to fetch the failed worker task log
+
     private List<String> fetchLog(String oldHost, int taskId) {
         try (Socket s = new Socket(oldHost, WORKER_PORT);
              ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream());
@@ -494,6 +523,7 @@ public class RainStormLeader {
         }
     }
 
+    // This method is invoked to install the old failed worker task log on a new host that task will now run on
     private void installLog(String newHost, int taskId, List<String> lines) {
         try (Socket s = new Socket(newHost, WORKER_PORT);
              ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream());
@@ -502,7 +532,6 @@ public class RainStormLeader {
             out.writeObject(new InstallLog(taskId, lines));
             out.flush();
 
-            //TODO: IS THIS NECESSARY?
             String response = (String) in.readObject();
             if(response.equals("OK")){
                 System.out.println("Successfully installed the old log in the new vm for the task ID: "+taskId);
@@ -518,8 +547,4 @@ public class RainStormLeader {
     public Map<Integer, TaskInfo> getTasks() {
         return new HashMap<>(this.tasks);
     }
-
-    /*
-     * Method to list all current tasks with their VM, PID, global task id, operator executed, and local log file name
-    */
 }
