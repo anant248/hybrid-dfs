@@ -2,18 +2,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # -------------------- DATASET A --------------------
-rainstorm_A_app1_trials = [5000, 5200, 5100]   # dummy, replace
-rainstorm_A_app2_trials = [4300, 4100, 4200]
+rainstorm_A_app1_trials = [258, 287, 276]
+rainstorm_A_app2_trials = [285, 276, 284]
 
-spark_A_app1_trials     = [6400, 6600, 6500]
-spark_A_app2_trials     = [5200, 5400, 5300]
+spark_A_app1_trials     = [32436, 32000, 32500]
+spark_A_app2_trials     = [22700, 22500, 23000]
 
 # -------------------- DATASET B --------------------
-rainstorm_B_app1_trials = [4800, 5000, 4900]
-rainstorm_B_app2_trials = [3800, 4000, 3900]
+rainstorm_B_app1_trials = [296, 283, 287]
+rainstorm_B_app2_trials = [291, 286, 281]
 
-spark_B_app1_trials     = [6900, 7100, 7000]
-spark_B_app2_trials     = [5500, 5700, 5600]
+spark_B_app1_trials     = [32436, 32000, 32500]
+spark_B_app2_trials     = [22700, 22500, 22300]
 
 # ============================================================
 # COMPUTE MEAN + STD FOR EACH APP AND EACH SYSTEM
@@ -86,12 +86,12 @@ def plot_dataset(dataset_name, rainstorm_means, rainstorm_stds,
 # GENERATE THE 2 REQUIRED PLOTS
 # ============================================================
 
-plot_dataset("Dataset A",
+plot_dataset("Dataset 1 (100MB English Wiki Corpus)",
              rainstorm_A_means, rainstorm_A_stds,
              spark_A_means, spark_A_stds,
              "dataset_A_comparison.png")
 
-plot_dataset("Dataset B",
+plot_dataset("Dataset 2 (150MB English Wiki Corpus)",
              rainstorm_B_means, rainstorm_B_stds,
              spark_B_means, spark_B_stds,
              "dataset_B_comparison.png")
