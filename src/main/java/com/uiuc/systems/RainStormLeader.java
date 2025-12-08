@@ -66,6 +66,7 @@ public class RainStormLeader {
     }
 
     private final Map<Integer, TaskInfo> tasks = new HashMap<>();
+    private final Map<Integer, Long> lastScaleTime = new ConcurrentHashMap<>();
 
     public RainStormLeader(String leaderHost, int numStages, int numTasks, boolean exactlyOnce, boolean autoscaleEnabled, int inputRate, int lw, int hw,  List<String> operatorsAndArgs, String localInputFileName, String hydfsDestFileName, Ring ring) {
         this.numStages = numStages;
@@ -127,86 +128,6 @@ public class RainStormLeader {
         }
     }
 
-
-   // This method is used to start streaming the input tuples or lines
-//    private void runSourceProcess(String localInput) {
-//        try {
-//            int stage0Tasks = 0;
-//            List<TaskInfo> stage0List = new ArrayList<>();
-//
-//            for (TaskInfo t : tasks.values()) {
-//                if (t.stageIdx == 0) {
-//                    stage0List.add(t);
-//                    stage0Tasks++;
-//                }
-//            }
-//
-//            if (stage0Tasks == 0) {
-//                System.err.println("No tasks in Stage 0 — cannot source.");
-//                return;
-//            }
-//
-//
-//            // for each task in stage0List, open a socket and keep it open
-//            List<Socket> sockets = new ArrayList<>();
-//            List<BufferedWriter> writers = new ArrayList<>();
-//
-//            for (TaskInfo t : stage0List) {
-//                try {
-//                    Socket s = new Socket(t.host, 9000 + t.globalTaskId);
-//                    sockets.add(s);
-//                    writers.add(new BufferedWriter(new OutputStreamWriter(s.getOutputStream())));
-//
-//                } catch (Exception e) {
-//                    e.printStackTrace();
-//                }
-//            }
-//
-//            System.out.println("SourceProcess: started streaming input to " + stage0Tasks + " Stage 0 tasks.");
-//            int lineNum = 0;
-//            ObjectMapper mapper = new ObjectMapper();
-//            long sleepMicros = (long)(1_000_000.0 / inputRate);
-//
-//            try (BufferedReader br = new BufferedReader(new FileReader(Paths.get("inputs/" + localInput).toString()))) {
-//                String line;
-//                while ((line = br.readLine()) != null) {
-//
-//                    int target = lineNum % stage0Tasks;
-//                    BufferedWriter w = writers.get(target);
-//
-//                    // Build tuple
-//                    long tid = nextGlobalTupleId.getAndIncrement();
-//                    ObjectNode js = mapper.createObjectNode();
-//                    js.put("id", tid);
-//                    js.put("key", localInput + ":" + lineNum);
-//                    js.put("line", line);
-//                    js.put("srcTask", -1);
-//
-//                    // Print if we are sending the tuple
-////                    System.out.println("SourceProcess: sending tuple of id" + tid + " to Task " + stage0List.get(target).globalTaskId);
-//                    // System.out.println(js.toString() + "\n");
-//
-//                    w.write(js.toString() + "\n");
-//                    w.flush();
-//
-//                    lineNum++;
-//                    Thread.sleep(0, (int)sleepMicros);
-//                }
-//
-//            } catch (Exception e) {
-//                leaderLogger.error("SourceProcess: encountered error while streaming input", e);
-//            }
-//
-//            System.out.println("SourceProcess: finished streaming all input lines.");
-//
-//            // close the sockets and writers
-//            for (BufferedWriter w : writers) w.close();
-//            for (Socket s : sockets) s.close();
-//        }
-//        catch (Exception e) {
-//            e.printStackTrace();
-//        }
-//    }
 
     private void runSourceProcess(String localInput) {
         try {
@@ -275,16 +196,10 @@ public class RainStormLeader {
                     w.flush();
 
                     lineNum++;
-                    if (tid % inputRate == 0) {
-                        System.out.println("SourceProcess TPS checkpoint → sent tuple " + tid);
-                    }
                 }
             } catch (Exception e) {
                 leaderLogger.error("SourceProcess: encountered error while streaming input", e);
             }
-
-//            System.out.println("SourceProcess: finished streaming all input lines.");
-
             for (BufferedWriter w : writers) w.close();
             for (Socket s : sockets) s.close();
 
@@ -317,7 +232,6 @@ public class RainStormLeader {
         }
         sb.append("downstreamCount=").append(downstreamTasks.size()).append("\n");
         for (TaskInfo d : downstreamTasks) {
-            //TODO: Double-check the worker task port
             int port = 9000 + d.globalTaskId;
             sb.append(d.host).append(":").append(port).append(":").append(d.globalTaskId).append("\n");
         }
@@ -432,8 +346,6 @@ public class RainStormLeader {
 
         TaskInfo updated = new TaskInfo(old.globalTaskId, old.stageIdx, old.idxWithinStage, newHost);
         tasks.put(failedTaskId, updated);
-
-        System.out.println("Restarting failed task " + failedTaskId + " on new host " + newHost);
         sendRoutingFileToTask(updated);
 
         if (updated.stageIdx > 0) {
@@ -461,7 +373,6 @@ public class RainStormLeader {
         try (Socket socket = new Socket(t.host, WORKER_PORT);
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
             out.writeObject(req);
-            System.out.println("Sent routing file to task " + t.globalTaskId + " on host " + t.host);
             out.flush();
         } catch (Exception e) {
             leaderLogger.error("Encountered an error while sending the routing file to the worker node " + t.globalTaskId);
@@ -476,7 +387,6 @@ public class RainStormLeader {
             return;
         }
         LeaderLoggerHelper.taskFail(failedTaskInfo.idxWithinStage,failedTaskInfo.globalTaskId,failedTaskInfo.host);
-        //TODO: what you wanna do after logging?
         restartFailedTask(req.getFailedTaskId());
     }
 
@@ -495,16 +405,22 @@ public class RainStormLeader {
 
     // This method is used to calculate the average number of tuples each task has processed which is used in autoscaling
     private void processLoad() {
+        long now = System.currentTimeMillis();
         for (int stage = 0; stage < numStages; stage++) {
-
-            // Skip auto-scaling for aggregate stages
             if ("aggregate".equalsIgnoreCase(getStageOperator(stage))) continue;
-
+            long last = lastScaleTime.getOrDefault(stage, 0L);
+            if (now - last < 3000) {
+                continue;
+            }
             long total = 0;
             int count = 0;
             for (TaskInfo t : tasks.values()) {
                 if (t.stageIdx == stage) {
-                    total += workerTaskLoad.getOrDefault(t.globalTaskId, 0L);
+                    if (!workerTaskLoad.containsKey(t.globalTaskId)) {
+                        continue;
+                    }
+
+                    total += workerTaskLoad.get(t.globalTaskId);
                     count++;
                 }
             }
@@ -512,8 +428,11 @@ public class RainStormLeader {
             long avg = total / count;
             if (avg < lw && count > 1) {
                 scaleDown(stage);
-            } else if (avg > hw) {
+                lastScaleTime.put(stage, System.currentTimeMillis());
+            }
+            else if (avg > hw) {
                 scaleUp(stage);
+                lastScaleTime.put(stage, System.currentTimeMillis());
             }
         }
     }
@@ -619,12 +538,6 @@ public class RainStormLeader {
             out.flush();
 
             String response = (String) in.readObject();
-            if(response.equals("OK")){
-                System.out.println("Successfully installed the old log in the new vm for the task ID: "+taskId);
-            }
-            else{
-                System.out.println("An error occurred while installing the olg log file in the new vm for the task ID: "+taskId);
-            }
 
         } catch (Exception ignored) {}
     }
