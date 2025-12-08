@@ -129,6 +129,85 @@ public class RainStormLeader {
 
 
    // This method is used to start streaming the input tuples or lines
+//    private void runSourceProcess(String localInput) {
+//        try {
+//            int stage0Tasks = 0;
+//            List<TaskInfo> stage0List = new ArrayList<>();
+//
+//            for (TaskInfo t : tasks.values()) {
+//                if (t.stageIdx == 0) {
+//                    stage0List.add(t);
+//                    stage0Tasks++;
+//                }
+//            }
+//
+//            if (stage0Tasks == 0) {
+//                System.err.println("No tasks in Stage 0 — cannot source.");
+//                return;
+//            }
+//
+//
+//            // for each task in stage0List, open a socket and keep it open
+//            List<Socket> sockets = new ArrayList<>();
+//            List<BufferedWriter> writers = new ArrayList<>();
+//
+//            for (TaskInfo t : stage0List) {
+//                try {
+//                    Socket s = new Socket(t.host, 9000 + t.globalTaskId);
+//                    sockets.add(s);
+//                    writers.add(new BufferedWriter(new OutputStreamWriter(s.getOutputStream())));
+//
+//                } catch (Exception e) {
+//                    e.printStackTrace();
+//                }
+//            }
+//
+//            System.out.println("SourceProcess: started streaming input to " + stage0Tasks + " Stage 0 tasks.");
+//            int lineNum = 0;
+//            ObjectMapper mapper = new ObjectMapper();
+//            long sleepMicros = (long)(1_000_000.0 / inputRate);
+//
+//            try (BufferedReader br = new BufferedReader(new FileReader(Paths.get("inputs/" + localInput).toString()))) {
+//                String line;
+//                while ((line = br.readLine()) != null) {
+//
+//                    int target = lineNum % stage0Tasks;
+//                    BufferedWriter w = writers.get(target);
+//
+//                    // Build tuple
+//                    long tid = nextGlobalTupleId.getAndIncrement();
+//                    ObjectNode js = mapper.createObjectNode();
+//                    js.put("id", tid);
+//                    js.put("key", localInput + ":" + lineNum);
+//                    js.put("line", line);
+//                    js.put("srcTask", -1);
+//
+//                    // Print if we are sending the tuple
+////                    System.out.println("SourceProcess: sending tuple of id" + tid + " to Task " + stage0List.get(target).globalTaskId);
+//                    // System.out.println(js.toString() + "\n");
+//
+//                    w.write(js.toString() + "\n");
+//                    w.flush();
+//
+//                    lineNum++;
+//                    Thread.sleep(0, (int)sleepMicros);
+//                }
+//
+//            } catch (Exception e) {
+//                leaderLogger.error("SourceProcess: encountered error while streaming input", e);
+//            }
+//
+//            System.out.println("SourceProcess: finished streaming all input lines.");
+//
+//            // close the sockets and writers
+//            for (BufferedWriter w : writers) w.close();
+//            for (Socket s : sockets) s.close();
+//        }
+//        catch (Exception e) {
+//            e.printStackTrace();
+//        }
+//    }
+
     private void runSourceProcess(String localInput) {
         try {
             int stage0Tasks = 0;
@@ -142,12 +221,11 @@ public class RainStormLeader {
             }
 
             if (stage0Tasks == 0) {
-                System.err.println("No tasks in Stage 0 — cannot source.");
+                System.err.println("No tasks in Stage 0, cannot source");
                 return;
             }
 
-
-            // for each task in stage0List, open a socket and keep it open
+            // Open sockets to all stage-0 tasks
             List<Socket> sockets = new ArrayList<>();
             List<BufferedWriter> writers = new ArrayList<>();
 
@@ -156,25 +234,35 @@ public class RainStormLeader {
                     Socket s = new Socket(t.host, 9000 + t.globalTaskId);
                     sockets.add(s);
                     writers.add(new BufferedWriter(new OutputStreamWriter(s.getOutputStream())));
-
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
 
             System.out.println("SourceProcess: started streaming input to " + stage0Tasks + " Stage 0 tasks.");
+
             int lineNum = 0;
             ObjectMapper mapper = new ObjectMapper();
-            long sleepMicros = (long)(1_000_000.0 / inputRate);
 
-            try (BufferedReader br = new BufferedReader(new FileReader(Paths.get("inputs/" + localInput).toString()))) {
+            long intervalNs = 1_000_000_000L / inputRate;
+            long nextSendTime = System.nanoTime();
+
+            try (BufferedReader br = new BufferedReader(
+                    new FileReader(Paths.get("inputs/" + localInput).toString()))) {
+
                 String line;
                 while ((line = br.readLine()) != null) {
-
+                    long now = System.nanoTime();
+                    if (now < nextSendTime) {
+                        long sleepNs = nextSendTime - now;
+                        Thread.sleep(
+                                sleepNs / 1_000_000,
+                                (int) (sleepNs % 1_000_000));
+                    }
+                    nextSendTime += intervalNs;
                     int target = lineNum % stage0Tasks;
                     BufferedWriter w = writers.get(target);
 
-                    // Build tuple
                     long tid = nextGlobalTupleId.getAndIncrement();
                     ObjectNode js = mapper.createObjectNode();
                     js.put("id", tid);
@@ -182,31 +270,29 @@ public class RainStormLeader {
                     js.put("line", line);
                     js.put("srcTask", -1);
 
-                    // Print if we are sending the tuple
-//                    System.out.println("SourceProcess: sending tuple of id" + tid + " to Task " + stage0List.get(target).globalTaskId);
-                    // System.out.println(js.toString() + "\n");
-
-                    w.write(js.toString() + "\n");
+                    w.write(js.toString());
+                    w.write("\n");
                     w.flush();
 
                     lineNum++;
-                    Thread.sleep(0, (int)sleepMicros);
+                    if (tid % inputRate == 0) {
+                        System.out.println("SourceProcess TPS checkpoint → sent tuple " + tid);
+                    }
                 }
-
             } catch (Exception e) {
                 leaderLogger.error("SourceProcess: encountered error while streaming input", e);
             }
 
-            System.out.println("SourceProcess: finished streaming all input lines.");
-            
-            // close the sockets and writers
+//            System.out.println("SourceProcess: finished streaming all input lines.");
+
             for (BufferedWriter w : writers) w.close();
             for (Socket s : sockets) s.close();
-        }
-        catch (Exception e) {
+
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
+
 
     private void distributeRoutingFiles() {
         for (TaskInfo t : tasks.values()) {
