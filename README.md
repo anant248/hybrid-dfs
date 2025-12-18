@@ -3,7 +3,7 @@
 ## Name
 Stream Processing System for CS 425 Group 76 Machine Problem 4
 
-Developed by Anant Goyal (anantg2) and Abuzar Hussain Mohammad (ahm7)
+Developed by Anant Goyal (anantg2@illinois.edu) and Abuzar Hussain Mohammad (ahm7@illinois.edu)
 
 ## Description
 
@@ -13,8 +13,8 @@ MP4-G76 extends our MP3 HyDFS distributed file system with a distributed stream-
 
 1. **Clone the repository:**
    ```bash
-   git clone https://gitlab.engr.illinois.edu/anantg2/mp4-g76.git
-   cd mp4-g76
+   git clone https://github.com/anant248/hybrid-dfs.git
+   cd hybrid-dfs
    ```
 2. **Build the project:**
    - Ensure you have Java 11+ and Maven installed.
@@ -39,7 +39,7 @@ MP4-G76 extends our MP3 HyDFS distributed file system with a distributed stream-
    - Run the main class for your node, specifying configuration as needed.
    - Example:
      ```bash
-     java -jar target/mp4-g76.jar --nodeId=<NODE_ID> --config=config.yaml
+     java -jar target/hybrid-dfs.jar --nodeId=<NODE_ID> --config=config.yaml
      ```
    - In case that doesnt work (replace XX with the current IP and introducer node IP respectively):
      ```bash
@@ -124,4 +124,4 @@ MP4-G76 extends our MP3 HyDFS distributed file system with a distributed stream-
 
 ## Project Status
 
-**In Progress** — MP4-G76 is now complete as part of the ECE 428 coursework. Bug reports and suggestions are welcome.
+**Completed** — MP4-G76 is now complete as part of the ECE 428 coursework. Bug reports and suggestions are welcome.
