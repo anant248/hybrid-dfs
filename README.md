@@ -1,13 +1,13 @@
-# MP4-G76
+# Distributed File System & Stream Processing Engine
 
 ## Name
-Stream Processing System for CS 425 Group 76 Machine Problem 4
+Dirsbuted File Storage (similar to HDFS) & Stream Processing System (similar to Apache Spark) written in Java
 
 Developed by Anant Goyal (anantg2@illinois.edu) and Abuzar Hussain Mohammad (ahm7@illinois.edu)
 
 ## Description
 
-MP4-G76 extends our MP3 HyDFS distributed file system with a distributed stream-processing engine called Rainstorm. The system supports multi-stage stream processing pipelines, fault tolerance through logging and replay, autoscaling, and integration with HyDFS for durable final outputs. Input data is streamed from HyDFS through Stage 0 tasks, processed through user-defined operators, and final outputs are appended to an output file stored on VM1.
+We have extended our HyDFS distributed file system with a distributed stream-processing engine called Rainstorm. The system supports multi-stage stream processing pipelines, fault tolerance through logging and replay, autoscaling, and integration with HyDFS for durable final outputs. Input data is streamed from HyDFS through Stage 0 tasks, processed through user-defined operators, and final outputs are appended to an output file stored on VM1.
 
 ## Installation
 
@@ -107,7 +107,7 @@ MP4-G76 extends our MP3 HyDFS distributed file system with a distributed stream-
    /hdfs/rainstrom_task_<id>.log
    ```
 
-## Testing (NOT APPLICABLE FOR MP4)
+## Testing
 
 1. **Unit tests:** Run with Maven:
    ```bash
@@ -118,10 +118,10 @@ MP4-G76 extends our MP3 HyDFS distributed file system with a distributed stream-
 
 ## Roadmap
 
-- [x] Read and understand MP4
-- [x] Implement MP4
-- [x] Demo MP4
+- [x] Read and understand Stream Processing Engine, Rainstorm
+- [x] Implement HyDFS with Rainstorm
+- [x] Demo
 
 ## Project Status
 
-**Completed** — MP4-G76 is now complete as part of the ECE 428 coursework. Bug reports and suggestions are welcome.
+**Completed** — hybrid DFS and Stream Processor is now complete as part of the CS 425 coursework. Bug reports and suggestions are welcome.
