@@ -16,7 +16,7 @@ public class UDPClient {
        This used Jackson library to convert/serialize the Message object to a JSON and send that over UDP.
        It uses ExecutorService in java to create worker threads as the sendMessage() tasks are submitted to it.
      */
-//    private static final Logger logger = LoggerFactory.getLogger(UDPClient.class);
+   private static final Logger logger = LoggerFactory.getLogger(UDPClient.class);
     private static final int port = 6970;
     private ExecutorService executorService = Executors.newCachedThreadPool();
     private DatagramSocket clientSocket;
@@ -33,20 +33,18 @@ public class UDPClient {
                 DatagramPacket packet = new DatagramPacket(jsonBytes, jsonBytes.length, InetAddress.getByName(serverIp), port);
                 clientSocket.send(packet);
 
-//                logger.info("BANDWIDTH_LOG," + System.currentTimeMillis() + "," +
-//                msg.getNode().getIp() + "," +
-//                jsonBytes.length);
+               logger.info("BANDWIDTH_LOG," + System.currentTimeMillis() + "," +
+               msg.getNode().getIp() + "," +
+               jsonBytes.length);
             }
             catch (IOException e) {
-                //TODO: Handle error- mark the node as failed directly when not using suspicion
-//                logger.error("An error occurred while sending the datagram packet to {}", serverIp);
+               logger.error("An error occurred while sending the datagram packet to {}", serverIp);
                 System.out.println("[UDPClient] An error occurred while sending the datagram packet to "+ serverIp);
             }
         });
     }
 
     public void handleSend(ArrayList<String> ips, Message msg){
-        //TODO: Loop through the membership list and update the node's own lastUpdated time before sending out gossips
         for(String server: ips){
             sendMessage(server, msg);
         }
@@ -54,7 +52,7 @@ public class UDPClient {
 
     public void stop() {
         if (clientSocket != null && !clientSocket.isClosed()) {
-//            logger.warn("Closing the UDP client socket");
+           logger.warn("Closing the UDP client socket");
             clientSocket.close();
         }
     }

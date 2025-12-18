@@ -15,7 +15,7 @@ public class Gossip {
        requirements(depends on the suspicion flag) and after that a timeout check will be run to detect failures and those
        failed entries from the membership list.
     */
-//    private static final Logger logger = LoggerFactory.getLogger(Gossip.class);
+   private static final Logger logger = LoggerFactory.getLogger(Gossip.class);
     private UDPClient client;
     private MemberShipList memberShipList;
     private Ring ring;
@@ -102,13 +102,13 @@ public class Gossip {
             if (!currentNode.equals(nodeId) && nodeInfo.getState() == NodeInfo.State.ALIVE && ((System.currentTimeMillis()) - nodeInfo.getLastUpdated()) >= tFail) {
                 nodeInfo.setState(NodeInfo.State.FAILED);
                 System.out.println("In Gossip: No Suspicion mode -- The following node is now failed: " + nodeId.getIp());
-//                logger.info("In Gossip: No Suspicion mode -- The following node is now failed: " + nodeId.getIp());
+               logger.info("In Gossip: No Suspicion mode -- The following node is now failed: " + nodeId.getIp());
             } 
             else if (!currentNode.equals(nodeId) && nodeInfo.getState() == NodeInfo.State.FAILED && ((System.currentTimeMillis()) - nodeInfo.getLastUpdated()) >= tCleanup) {
                 currentMemberShipList.remove(nodeId);
                 ring.removeNode(nodeId);
                 System.out.println("In Gossip: No Suspicion mode -- The following node is now cleaned up (removed) from membership: " + nodeId.getIp());
-//                logger.info("In Gossip: No Suspicion mode -- The following node is now cleaned up (removed) from membership: " + nodeId.getIp());
+               logger.info("In Gossip: No Suspicion mode -- The following node is now cleaned up (removed) from membership: " + nodeId.getIp());
                 hyDFS.rereplicate();
             }
         }
@@ -134,7 +134,7 @@ public class Gossip {
                     nodeInfo.setState(NodeInfo.State.SUSPECT);
                     nodeInfo.setSuspectTime(System.currentTimeMillis());
                     System.out.println("In Gossip: Suspicion mode -- The following node is now suspected: " + nodeId.getIp());
-//                    logger.info("In Gossip: Suspicion mode -- The following node is now suspected: "+ nodeId.getIp());
+                   logger.info("In Gossip: Suspicion mode -- The following node is now suspected: "+ nodeId.getIp());
                 }
             }
             else if(s == NodeInfo.State.SUSPECT){
@@ -142,14 +142,14 @@ public class Gossip {
                     nodeInfo.setState(NodeInfo.State.FAILED);
                     nodeInfo.setFailTime(System.currentTimeMillis());
                     System.out.println("In Gossip: Suspicion mode -- The following node is now failed: " + nodeId.getIp());
-//                    logger.info("In Gossip: Suspicion mode -- The following node is now failed: "+ nodeId.getIp());
+                   logger.info("In Gossip: Suspicion mode -- The following node is now failed: "+ nodeId.getIp());
                 }
             }
             else if(s == NodeInfo.State.FAILED){
                 if((System.currentTimeMillis()) - nodeInfo.getFailTime() >= tCleanup){
                     currentMemberShipList.remove(nodeId);
                     System.out.println("In Gossip: Suspicion mode -- The following node is now cleaned up (removed) from membership: " + nodeId.getIp());
-//                    logger.info("In Gossip: Suspicion mode -- The following node is now cleaned up (removed) from membership: " + nodeId.getIp());
+                   logger.info("In Gossip: Suspicion mode -- The following node is now cleaned up (removed) from membership: " + nodeId.getIp());
                 }
             }
             else continue;

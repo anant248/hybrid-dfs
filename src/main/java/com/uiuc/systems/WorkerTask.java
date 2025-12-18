@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.math.BigInteger;
 import java.net.*;
@@ -408,14 +407,10 @@ public class WorkerTask {
                     continue;
                 }
 
-                // System.out.println("Task " + taskId + ": received tuple " + tupleId + " from upstream task " + upstreamTask);
-                // System.out.println(line + "\n");
-
                 // add to seen set and write to the log
                 seenInputTuples.add(tupleId);
                 fos.write(("INPUT " + tupleId + "\n").getBytes());
 
-                // appendToTaskLog("INPUT " + tupleId);
                 // forward to operator stdin
                 opStdin.write(line + "\n");
                 opStdin.flush();
@@ -487,15 +482,6 @@ public class WorkerTask {
         } catch (Exception e) {
             System.err.println("Task " + taskId + ": failed to rebuild state: " + e);
             return false;
-        }
-    }
-
-    private void appendToTaskLog(String logLine) {
-        try {
-            // append to the tasks log file in HyDFS
-            hdfs.appendTuple(taskLogPath, logLine + "\n");
-        } catch (Exception e) {
-            taskLogger.error("Task {}: failed to append to HyDFS log {}", taskId, taskLogPath, e);
         }
     }
 

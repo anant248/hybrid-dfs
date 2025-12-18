@@ -14,7 +14,7 @@ public class UDPServer {
     /* This is a UDP Server class that receives the messages in the JSON format from all the other nodes.
        The JSON is then de-serialized to a Message object which is passed to the handlers.
     */
-//    private static final Logger logger = LoggerFactory.getLogger(UDPServer.class);
+   private static final Logger logger = LoggerFactory.getLogger(UDPServer.class);
     private volatile boolean running = true;
     private DatagramSocket serverSocket;
     private static final int port = 6970;
@@ -67,7 +67,7 @@ public class UDPServer {
                 // simulate drop
                 if (Math.random() < dropRate) {
                     System.out.println("Dropping incoming packet from " + incomingPacket.getAddress() + ":" + incomingPacket.getPort());
-//                    logger.info("Dropping incoming packet from " + incomingPacket.getAddress() + ":" + incomingPacket.getPort());
+                   logger.info("Dropping incoming packet from " + incomingPacket.getAddress() + ":" + incomingPacket.getPort());
                     continue; // skip processing this message
                 }
 
@@ -93,25 +93,24 @@ public class UDPServer {
                             }
                         }
                     } catch (IOException e) {
-                        //why there is a need for an "if" below?
                         if (running){
-//                            logger.info("An error occurred while processing the message: "+e.getMessage());
+                           logger.info("An error occurred while processing the message: "+e.getMessage());
                             System.out.println("An error occurred while processing the message: "+e.getMessage());
                         }
                     }
                 });
             }
         } catch (IOException e) {
-//          logger.error("An error occurred while handling incoming gossips: "+e.getMessage());
+         logger.error("An error occurred while handling incoming gossips: "+e.getMessage());
             System.out.println("An error occurred while handling incoming gossips: "+e.getMessage());
         } finally {
-//            logger.info("Shutting down the executor service");
+           logger.info("Shutting down the executor service");
             executor.shutdown();
         }
     }
 
     public void start(){
-//        logger.info("Starting up the UDP server on port {}", port);
+       logger.info("Starting up the UDP server on port {}", port);
         handleIncomingRequests();
     }
 
@@ -119,7 +118,7 @@ public class UDPServer {
         running = false;
 
         if (serverSocket != null && !serverSocket.isClosed()) {
-//            logger.warn("Shutting down the UDP Server on port {}", port);
+           logger.warn("Shutting down the UDP Server on port {}", port);
             serverSocket.close();
         }
     }

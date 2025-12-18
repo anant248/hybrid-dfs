@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
  */
 
 public class HyDFS {
-//    private static final Logger logger = LoggerFactory.getLogger(HyDFS.class);
+    private static final Logger logger = LoggerFactory.getLogger(HyDFS.class);
     private static final int PORT = 7070; 
     private volatile boolean initialized = false;
     private NodeId currentNode;
@@ -97,7 +97,7 @@ public class HyDFS {
            try (FileOutputStream fos = new FileOutputStream(file)) {
                fos.write(req.getFileData());
            } catch (IOException e) {
-//               logger.error("Unable to write to file: /hdfs/" + fileName + "due to error: " + e.getMessage());
+               logger.error("Unable to write to file: /hdfs/" + fileName + "due to error: " + e.getMessage());
                sendResponseToClient(client,"NACK",out);
                return;
            }
@@ -123,7 +123,7 @@ public class HyDFS {
                 try {
                     if (f.get()) ackCount++;
                 } catch (Exception e) {
-//                    logger.error(e.getMessage());
+                   logger.error(e.getMessage());
                 }
             }
 
@@ -137,7 +137,7 @@ public class HyDFS {
            }
         }
         catch (Exception e){
-//            logger.error(e.getMessage());
+           logger.error(e.getMessage());
             sendResponseToClient(client, "NACK",out);
         } finally {
             executorService.shutdown();
@@ -195,7 +195,7 @@ public class HyDFS {
             String response = (String) in.readObject();
             return response.equals("ACK");
         } catch (Exception e){
-//            logger.error(e.getMessage());
+           logger.error(e.getMessage());
             System.out.println("Unsuccessful create to replica");
             return false;
         }
@@ -234,7 +234,7 @@ public class HyDFS {
             return false;
         }
         catch(Exception e){
-//            logger.error(e.getMessage());
+           logger.error(e.getMessage());
             return false;
         }
     }
@@ -286,7 +286,7 @@ public class HyDFS {
             out.flush();
         }
         catch (IOException e){
-//            logger.error("Unable to send response back to client: ", e.getMessage());
+           logger.error("Unable to send response back to client: ", e.getMessage());
             System.out.println("Unable to response back to client");
         }
     }
@@ -312,19 +312,19 @@ public class HyDFS {
             byte[] fileData = Files.readAllBytes(Paths.get("inputs",localFilePath));
             AppendRequest ownerAppendRequest = new AppendRequest(fileData,hdfsFileName);
 
-//            logger.info("Starting append...");
+           logger.info("Starting append...");
             System.out.println("Starting append...");
 
             out.writeObject(ownerAppendRequest);
             out.flush();
 
             String response = (String) in.readObject();
-//            logger.info("Append completed");
+           logger.info("Append completed");
             System.out.println("Append completed");
             return response.equals("ACK");
         }
         catch(Exception e){
-//            logger.error("Append incomplete with issue: " + e.getMessage());
+           logger.error("Append incomplete with issue: " + e.getMessage());
             System.out.println("Append incomplete with issue: " + e.getMessage());
             return false;
         }
@@ -359,7 +359,7 @@ public class HyDFS {
             String response = (String) in.readObject();
             return response.equals("ACK");
         } catch (Exception e) {
-//            logger.error("AppendTuple incomplete with issue: " + e.getMessage());
+           logger.error("AppendTuple incomplete with issue: " + e.getMessage());
             return false;
         }
     }
@@ -409,7 +409,7 @@ public class HyDFS {
                     }
                 } catch (Exception e) {
                     System.out.println("Append failed from client: "+clientIp);
-//                    logger.error("Append failed with issue: " + e.getMessage());
+                   logger.error("Append failed with issue: " + e.getMessage());
                 }
             });
         }
@@ -433,17 +433,17 @@ public class HyDFS {
 
         // initiate merge request to owner (primary replica node)
         try(Socket socket = new Socket(ownerIp,PORT)) {
-//            logger.info("Merge started...");
+           logger.info("Merge started...");
             System.out.println("Merge started...");
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
             MergeRequest mergeRequest = new MergeRequest(hdfsFileName,hdfsFileReplicas);
             out.writeObject(mergeRequest);
             out.flush();
-//            logger.info("Merge complete");
+           logger.info("Merge complete");
             System.out.println("Merge complete");
         } catch (Exception e){
-//            logger.error("Merge incomplete with issue: " + e.getMessage());
+           logger.error("Merge incomplete with issue: " + e.getMessage());
             System.out.println("Merge incomplete with issue: " + e.getMessage());
         }
     }
@@ -468,7 +468,7 @@ public class HyDFS {
         }
 
         long mergeStart = System.currentTimeMillis();
-//        logger.info("[MergeStart] file=" + fileName + " ts=" + mergeStart);
+       logger.info("[MergeStart] file=" + fileName + " ts=" + mergeStart);
 
         int ownerLastIndex = fileMeta.getLastIndex();
         List<NodeId> replicasThatNeedMerge = new ArrayList<NodeId>();
@@ -532,8 +532,8 @@ public class HyDFS {
         }
 
         long mergeEnd = System.currentTimeMillis();
-//        logger.info("[MergeEnd] file=" + fileName + " ts=" + mergeEnd);
-//        logger.info("Merge time = " + (mergeEnd - mergeStart) + " ms");
+       logger.info("[MergeEnd] file=" + fileName + " ts=" + mergeEnd);
+       logger.info("Merge time = " + (mergeEnd - mergeStart) + " ms");
     }
 
     /**
@@ -827,10 +827,10 @@ public class HyDFS {
         String fileName = req.getFileName();
         FileMetaData fileMeta = fileMetaMap.get(fileName);
 
-//        if (fileMeta == null) {
-//            sendResponseToClient(client, "NACK",out);
-//            return;
-//        }
+       if (fileMeta == null) {
+           sendResponseToClient(client, "NACK",out);
+           return;
+       }
 
         File file = new File("hdfs/" + fileName);
         if (!file.exists()) {
@@ -924,8 +924,8 @@ public class HyDFS {
             // start re-replication timer
             long reReplicaStart = System.currentTimeMillis();
             long dataTransferSize = 0;
-            // System.out.println("[ReReplicationStart] ts = " + reReplicaStart + " ms");
-//            logger.info("[ReReplicationStart] ts = " + reReplicaStart + " ms");
+            System.out.println("[ReReplicationStart] ts = " + reReplicaStart + " ms");
+           logger.info("[ReReplicationStart] ts = " + reReplicaStart + " ms");
 
             Set<NodeId> oldSet = new HashSet<>(meta.getReplicas());
             Set<NodeId> newSet = new HashSet<>(expectedReplicas);
@@ -948,10 +948,10 @@ public class HyDFS {
 
             // end re-replication timer
             long reReplicaEnd = System.currentTimeMillis();
-            // System.out.println("[ReReplicationEnd] ts = " + reReplicaEnd + " ms");
-//            logger.info("[ReReplicationEnd] ts = " + reReplicaEnd + " ms");
-//            logger.info("Total ReReplication Time, tr = " + (reReplicaEnd - reReplicaStart) + " ms");
-//            logger.info("Total Data Transfer, dt = " + dataTransferSize + " bytes");
+            System.out.println("[ReReplicationEnd] ts = " + reReplicaEnd + " ms");
+           logger.info("[ReReplicationEnd] ts = " + reReplicaEnd + " ms");
+           logger.info("Total ReReplication Time, tr = " + (reReplicaEnd - reReplicaStart) + " ms");
+           logger.info("Total Data Transfer, dt = " + dataTransferSize + " bytes");
 
             // Update metadata after successful replication
             meta.setOwner(expectedReplicas.get(0));
@@ -1049,8 +1049,8 @@ public class HyDFS {
                 // start re-balance timer
                 long reBalanceStart = System.currentTimeMillis();
                 long dataTransferSize = 0;
-                // System.out.println("[ReBalanceStart] ts = " + reBalanceStart + " ms");
-//                logger.info("[ReBalanceStart] ts = " + reBalanceStart + " ms");
+                System.out.println("[ReBalanceStart] ts = " + reBalanceStart + " ms");
+               logger.info("[ReBalanceStart] ts = " + reBalanceStart + " ms");
 
                 Set<NodeId> oldSet = new HashSet<>(currentReplicas);
                 Set<NodeId> newSet = new HashSet<>(expectedReplicas);
@@ -1071,10 +1071,10 @@ public class HyDFS {
 
                 // end re-balance timer
                 long reBalanceEnd = System.currentTimeMillis();
-                // System.out.println("[ReBalanceEnd] ts = " + reBalanceEnd + " ms");
-//                logger.info("[ReBalanceEnd] ts = " + reBalanceEnd + " ms");
-//                logger.info("Total ReBalance Time, tr = " + (reBalanceEnd - reBalanceStart) + " ms");
-//                logger.info("Total Data Transfer, dt = " + dataTransferSize + " bytes");
+                System.out.println("[ReBalanceEnd] ts = " + reBalanceEnd + " ms");
+               logger.info("[ReBalanceEnd] ts = " + reBalanceEnd + " ms");
+               logger.info("Total ReBalance Time, tr = " + (reBalanceEnd - reBalanceStart) + " ms");
+               logger.info("Total Data Transfer, dt = " + dataTransferSize + " bytes");
 
                 // update metadata for this node
                 meta.setOwner(expectedReplicas.get(0));
